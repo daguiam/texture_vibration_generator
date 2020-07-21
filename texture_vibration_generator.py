@@ -47,7 +47,21 @@ class Cursor():
         
 
 
+from collections import deque
 
+class CircularBuffer (deque):
+    """ Creates a circular buffer class which inherits the deque collection 
+    and implements extract functions"""
+    
+    def extract(self,n):
+        """ Extracts n items from the right """
+        return list([self.pop() for i in range(n)])
+    
+    def extractleft(self, n):
+        """ Extracts n items from the left """
+        return list(reversed([self.popleft() for i in range(n)]))
+        
+        
 
 
 def resample_spectrum(spectrum, ratio):
@@ -132,6 +146,60 @@ def butter_lowpass_coefficients(cutoff, fs, order=5):
 
 
 
+def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, ):
+    """ Estimates the audio signal, sampled at fs_radio, obtained from a reference spectrum texture
+    spectrum_texture : array, reference spatial spectrum of the spectrum
+    fs_spatial : spatial sampling frequency of the texture
+    velocity_probe : velocity of the probe over the spectrum texture
+    N_audio_segment : number of samples of the output audio segment
+    fs_audio : sampling frequency of the output audio signal
+    
+    """
+    sample_time_span = N_audio_segment/fs_audio  # time of each audio_segment
+    N_frame = N_audio_segment
+    if velocity_probe ==0 :
+        #print("zero velocity")
+        sig_frame = np.zeros(N_frame)
+    else:
+
+        # first get signal from texture sampled at fs_spatial
+        N_texture = len(spectrum_texture)
+        sig_spatial = generate_audio_from_spectrum(spectrum_texture, N_output=None)
+
+        N_spatial = len(sig_spatial)
+        t_spatial = np.linspace(0, N_texture/fs_spatial, N_spatial)
+
+
+        # resample the signal to the fs_temporal = fs_spatial*velocity_probe
+
+        sig_temporal = sig_spatial
+        N_temporal = len(sig_temporal)
+
+        fs_temporal = fs_spatial*velocity_probe
+        window_time_span = N_spatial/fs_temporal
+
+        # repeats the transient signal to fit the sample_time_span 
+        if window_time_span < sample_time_span:
+            reps = np.int(np.ceil(sample_time_span/window_time_span))
+            #print("reps",reps)
+
+            sig_temporal = np.tile(sig_temporal, reps)
+            N_temporal = len(sig_temporal)
+
+
+        # Resample the temporal signal to the fs_audio sampling rate
+
+        N_audio = np.int(fs_audio/fs_temporal*N_temporal)
+        sig_audio = signal.resample(sig_temporal, N_audio)
+        t_audio = np.linspace(0,N_audio/fs_audio, N_audio)
+
+
+        # Trims the audio signal to the sample_time_span
+
+        sig_frame = sig_audio[0:N_frame]
+    t_frame = np.linspace(0,N_frame/fs_audio, N_frame)
+    
+    return (t_frame, sig_frame)
 
 
 def callback(in_data, frame_count, time_info, status):
