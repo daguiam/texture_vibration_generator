@@ -199,7 +199,24 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
         sig_frame = sig_audio[0:N_frame]
     t_frame = np.linspace(0,N_frame/fs_audio, N_frame)
     
-    return (t_frame, sig_frame)
+    return (t_frame, sig_frame.real)
+
+
+def window_easing(n, easing=None):
+    """
+    n - int, window size
+    easing - int, samples to attenuate at edges with sine"""
+    if easing is None:
+        easing = np.int(np.floor(n/2))
+    
+    assert easing <= n/2, "easing must be less than half the window size"
+    window = np.ones(n)
+    if easing>0:
+        #window[:easing] = np.sin(2*np.pi*(np.arange(easing)/(2*easing)-1/4))/2+0.5
+        #window[-easing:] = np.sin(2*np.pi*(np.arange(easing)/(2*easing)+1/4))/2+0.5
+        window[:easing] = np.linspace(0,1,easing, endpoint=True)
+        window[-easing:] = np.flip(window[:easing])
+    return window
 
 
 def callback(in_data, frame_count, time_info, status):
@@ -305,7 +322,16 @@ if __name__ == "__main__":
 
 
 
-    N_CHUNK = 512*2
+
+
+    # Streaming audio buffer to output.
+    # With callback function
+
+    # fs_audio = np.int(fs_temporal)
+    # print(fs_temporal)
+    # N = texture.size
+
+    N_CHUNK = 512*1
     fs_audio = 8192
     # ratio_fs = fs_audio/fs_temporal
 
@@ -313,27 +339,58 @@ if __name__ == "__main__":
     N_output = N_CHUNK
     start_phase = 0
 
-    cutoff = 512
+    cutoff = 800
 
     sig = np.zeros(N_CHUNK)
 
+    # define callback (2)
+    def callback(in_data, frame_count, time_info, status):
+
+        global zf
+        global b,a
+        global buffer
+        global next_frame
+            
+        
+        frame = np.copy(buffer.extractleft(frame_count))
+
+    #         sig = butter_lowpass_filter(sig, cutoff, fs_audio, order=5)
+        frame, zf = signal.lfilter(b, a, frame, zi=zf)
+        
+        
+        audio = array2audio(frame.real)
+        data = audio
+        
+        output_time = time_info['output_buffer_dac_time']
+        current_time = time_info['current_time']
+    #     print(N_ratio, sampling_ratio)
+    #     print("\r %0.3f    fs=%0.3fHz    %0.3fmm/s f=%0.3f"%(output_time-current_time,fs_temporal,velocity_probe,10*velocity_probe), end="")
+    #     print(status)
+    #     velocity_probe += 1
+        if len(buffer)<2*frame_count:
+            next_frame = True
+        if stream_continue:
+            return (data, pyaudio.paContinue)
+        else:
+            return (data, pyaudio.paComplete)
         
 
-        
+    frame_list = []
     #Initialize
     # sig = generate_audio_from_spectrum(spectrum_texture, N_output=N_output)
     sig = np.zeros(N_CHUNK)
     frequency = 0
+    n_phase = 0
+    filter_order = 15
 
-    b,a = butter_lowpass_coefficients(cutoff, fs_audio, order=15)
-    # zf = signal.lfiltic(b,a,sig)
-    zi = signal.lfilter_zi(b, a)
+    b,a = butter_lowpass_coefficients(cutoff, fs_audio,order=filter_order)
+    zf = signal.lfiltic(b,a,sig)
 
     p = pyaudio.PyAudio()
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = fs_audio
-    # CHUNK = spectrum_texture.size
+    CHUNK = spectrum_texture.size
 
 
     cursor = Cursor()
@@ -344,8 +401,7 @@ if __name__ == "__main__":
                     rate=RATE,
                     output=True,
                     stream_callback=callback,
-                    frames_per_buffer=N_CHUNK,)
-                    # output_device_index=5)
+                    frames_per_buffer=N_CHUNK)
 
 
 
@@ -357,47 +413,59 @@ if __name__ == "__main__":
     stream.start_stream()
 
     stream_continue = 1
+    next_frame = True
 
 
-
-    # wait for stream to finish (5)
-
-
-    # @interact(velocity=1)
-    # def get_velocity_probe(velocity):
-    #     global velocity_probe
-    #     velocity_probe = velocity
-    #     return velocity
-    try:
-        while stream.is_active():
-            time.sleep(0.05)
-        #     print(velocity_probe)
-            velocity_probe = 1
-    #         velocity_probe = cursor.speed()/500+1
-    #         velocity_probe = get_velocity_probe()
+    velocity_probe = cursor.speed()/500 +10
 
 
-            velocity_probe = cursor.speed()/500+1
-            # t = np.linspace(0,N_CHUNK/fs_audio,N_CHUNK)
-            # frequency = 100*velocity_probe
-            # frequency = np.floor(frequency)
-            # sig = np.sin(2*np.pi*frequency*t)
+    buffer = CircularBuffer(maxlen=10*fs_audio)
+
+    time_texture_sample_period = 0.05
+
+    for i in range(1):
+        append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
+
+
+    N_audio_segment = 2048 # How big is the audio segment size
+    N_overlap = 256
+    N_audio_segment = N_audio_segment+N_overlap
+
+    time_texture_sample_period = N_audio_segment/fs_audio
+    prev_time = time.time()
+    while stream.is_active():
         
-            print("\r %04.3f    %04.3f"%(frequency, np.ptp(sig)), end="")
+        
 
-            # print("pk-pk",np.ptp(sig))
+    #     if len(buffer) < N_audio_segment:
+        if next_frame:
+            velocity_probe = cursor.speed()/500 +10
+            append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
+    #         stream_continue = 0
+    #         print("Buffer %d is less than the frame count %d"%(len(buffer), N_CHUNK))
+    #         break
 
+    #     for i in range(20):
+    #     if 1:
+    #         curr_time = time.time()
+    #         if (curr_time - prev_time > time_texture_sample_period) or next_frame:
+    #             print("appending to buffer")
+    #             velocity_probe = cursor.speed()/500 +10
 
-    except KeyboardInterrupt:
-        pass
+    #             print("\r %0.3fs  %0.3fmm/s f=%0.3f"%(curr_time,velocity_probe,10*velocity_probe), end="")
+    #             append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
+    #             prev_time = curr_time
+    #             next_frame = False
 
-
-        print("end")
-
-        stream.stop_stream()
-        stream.close()
-
-        p.terminate
+                
 
 
     print("end")
+
+    stream.stop_stream()
+    stream.close()
+
+    p.terminate
+
+    plt.plot(sig)
+    # plt.plot(spectrum_texture)
