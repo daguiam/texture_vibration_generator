@@ -219,110 +219,117 @@ def window_easing(n, easing=None):
     return window
 
 
+
+def append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap ):
+
+    t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
+
+    window = window_easing(N_audio_segment, N_overlap)
+    # Remove the overlap samples
+    sig_frame = sig_frame*window
+    if len(buffer)>N_overlap:
+        tail = np.array(buffer.extract(N_overlap))
+
+        sig_frame[:N_overlap] = sig_frame[:N_overlap]+tail
+
+    
+#     print(sig_frame)
+    buffer.extend(list(sig_frame.real))
+    return 
+
+
+
+
+
+
+# define callback (2)
 def callback(in_data, frame_count, time_info, status):
-    global velocity_probe
-    global sig
+
     global zf
     global b,a
-    global frequency
-    global n_phase
-    N_output = frame_count
-   
-    velocity_probe = cursor.speed()/500 +1
-
-    
-    if velocity_probe ==0 :
-        sig_frame = np.zeros(N_CHUNK)
-    else:
-    #     print(N_CHUNK,fs_audio,fs_spatial, N_output)
-        N_spectrum = N_output = spectrum_texture.size
-
-    #     velocity_probe = 3
-        N_resampled = np.int(velocity_probe*fs_spatial/fs_spatial*N_spectrum)
-    #     print(N_resampled)
-
-
-
-        # first get signal from texture sampled at fs_spatial
-        N_texture = len(spectrum_texture)
-        sig_spatial = generate_audio_from_spectrum(spectrum_texture, N_output=None)
-#         reps = 2
-#         sig_spatial = np.tile(sig_spatial, reps)
-        N_spatial = len(sig_spatial)
-        t_spatial = np.linspace(0, N_texture/fs_spatial, N_spatial)
-
-
-        # resample the signal to the fs_temporal = fs_spatial*velocity_probe
-
-        fs_temporal = fs_spatial*velocity_probe
-        # N_temporal = velocity_probe*N_spatial
-        reps = 5
-
-        sig_temporal = np.tile(sig_spatial, reps)
-        N_temporal = len(sig_temporal)
-
-
-
-    #     t_temporal = np.linspace(0, N_temporal/fs_temporal, N_temporal)
-
-
-
-        # CHUNK timespan:
-
-        t_CHUNK = N_CHUNK/fs_audio
-    #     print(t_CHUNK)
-        # t_audio = np.linspace(0,t_CHUNK, N_CHUNK)
-
-        N_audio = np.int(fs_audio/fs_temporal*N_temporal)
-
-        #resample to the sampling frequency fs_audio
-        sig_audio = signal.resample(sig_temporal, N_audio)
-        t_audio = np.linspace(0,N_audio/fs_audio, N_audio)
-
-    #     n_phase = 0
-
-        t_CHUNK = N_CHUNK/fs_audio
-        sig_frame = sig_audio[n_phase:np.mod(N_CHUNK+n_phase, N_audio)]
-        t_frame = np.linspace(0,t_CHUNK, N_CHUNK)
-#         n_phase = np.mod(N_CHUNK+n_phase, N_audio)
-
-#     sig = np.sin(phase)
-#     prev_phase = phase[-1]
-        
+    global buffer
+    global next_frame
         
     
-    frame = np.copy(sig_frame)
+    frame = np.copy(buffer.extractleft(frame_count))
 
 #         sig = butter_lowpass_filter(sig, cutoff, fs_audio, order=5)
     frame, zf = signal.lfilter(b, a, frame, zi=zf)
     
+    
     audio = array2audio(frame.real)
     data = audio
-#     print(frame_count,data.size, N_ratio, sampling_ratio, fs_temporal, fs_audio, sampling_ratio*fs_audio)
-
-#     print("\r%0.3f %0.3f %0.3f"%(velocity_probe, fs_spatial, fs_temporal), end="")
-#     print(time_info)
     
     output_time = time_info['output_buffer_dac_time']
     current_time = time_info['current_time']
 #     print(N_ratio, sampling_ratio)
-    print("\r %0.3f    %0.3f    %0.3f"%(output_time-current_time,fs_temporal,velocity_probe), end="")
+#     print("\r %0.3f    fs=%0.3fHz    %0.3fmm/s f=%0.3f"%(output_time-current_time,fs_temporal,velocity_probe,10*velocity_probe), end="")
 #     print(status)
 #     velocity_probe += 1
+    if len(buffer)<2*frame_count:
+        next_frame = True
     if stream_continue:
         return (data, pyaudio.paContinue)
     else:
         return (data, pyaudio.paComplete)
 
+
+
+def create_spectrum_texture(wavelength_texture, length_texture, N_texture, ):
+    
+    # N_texture = 512*1
+    # wavelength_texture = 1/5 # [mm]
+    # wavelength_texture = 1/10 # [mm]
+    # length_texture = 1
+    fs_spatial = N_texture/(length_texture)
+
+    velocity_probe = 1 # [mm/s]
+
+    k_texture = 2*np.pi/wavelength_texture
+
+    x = np.linspace(0, length_texture, N_texture, endpoint=True)
+    t = x/velocity_probe
+
+
+    texture_height = 0.1
+    texture =  signal.square(k_texture * x)
+    texture =  np.sin(k_texture * x)
+
+
+    # texture = np.abs(texture)
+    texture = np.power(texture,2)
+
+    texture = texture*texture_height
+
+
+    wavelength_probe = np.inf # [mm]
+    length_probe = 5
+    k_probe = 2*np.pi/wavelength_probe
+    probe = np.cos(k_probe*x)
+    # probe = np.ones(len(x))
+
+    # for a given probe velocity, the spatial frequencies k convert to temporal frequencies as w = k*v
+
+    texture_AC = texture-np.mean(texture)
+
+
+    omega_probe = x*k_texture*velocity_probe
+    frequency_probe = x*k_texture/(2*np.pi)*velocity_probe
+    spectrum_texture = np.fft.fft(texture_AC)
+    fs_temporal = fs_spatial*velocity_probe
+    # print("fs_temporal", fs_temporal, "1/t", 1/np.diff(t)[0])
+
+    f = np.fft.fftfreq(spectrum_texture.size, d=1/fs_spatial)
+    ft = np.fft.fftfreq(spectrum_texture.size, d=1/fs_temporal)
+
+    spectrum_texture = np.fft.fftshift(spectrum_texture)
+    f = np.fft.fftshift(f)
+
+    ft = np.fft.fftshift(ft)
+
+    return (spectrum_texture, fs_spatial)
+
 if __name__ == "__main__":
-
-    # Streaming audio buffer to output.
-    # With callback function
-
-
-
-
-
 
     # Streaming audio buffer to output.
     # With callback function
@@ -330,6 +337,24 @@ if __name__ == "__main__":
     # fs_audio = np.int(fs_temporal)
     # print(fs_temporal)
     # N = texture.size
+
+
+    # creating analytical spectrum texture
+    N_texture = 512*1
+    wavelength_texture = 1/10 # [mm]
+    length_texture = 1
+
+    spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
+    
+
+
+    
+    N_audio_segment = 2048# How big is the audio segment size
+    N_overlap = 128
+
+
+
+   
 
     N_CHUNK = 512*1
     fs_audio = 8192
@@ -341,39 +366,7 @@ if __name__ == "__main__":
 
     cutoff = 800
 
-    sig = np.zeros(N_CHUNK)
 
-    # define callback (2)
-    def callback(in_data, frame_count, time_info, status):
-
-        global zf
-        global b,a
-        global buffer
-        global next_frame
-            
-        
-        frame = np.copy(buffer.extractleft(frame_count))
-
-    #         sig = butter_lowpass_filter(sig, cutoff, fs_audio, order=5)
-        frame, zf = signal.lfilter(b, a, frame, zi=zf)
-        
-        
-        audio = array2audio(frame.real)
-        data = audio
-        
-        output_time = time_info['output_buffer_dac_time']
-        current_time = time_info['current_time']
-    #     print(N_ratio, sampling_ratio)
-    #     print("\r %0.3f    fs=%0.3fHz    %0.3fmm/s f=%0.3f"%(output_time-current_time,fs_temporal,velocity_probe,10*velocity_probe), end="")
-    #     print(status)
-    #     velocity_probe += 1
-        if len(buffer)<2*frame_count:
-            next_frame = True
-        if stream_continue:
-            return (data, pyaudio.paContinue)
-        else:
-            return (data, pyaudio.paComplete)
-        
 
     frame_list = []
     #Initialize
@@ -407,7 +400,7 @@ if __name__ == "__main__":
 
     print("opened")
 
-
+    stream_continue = 0
 
     # start the stream (4)
     stream.start_stream()
@@ -427,7 +420,7 @@ if __name__ == "__main__":
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
 
 
-    N_audio_segment = 2048 # How big is the audio segment size
+    N_audio_segment = 1024 # How big is the audio segment size
     N_overlap = 256
     N_audio_segment = N_audio_segment+N_overlap
 
@@ -439,7 +432,10 @@ if __name__ == "__main__":
 
     #     if len(buffer) < N_audio_segment:
         if next_frame:
+            next_frame = 0
             velocity_probe = cursor.speed()/500 +10
+            fs_temporal = fs_spatial*velocity_probe
+            print("\rVelocity %0.3f mm/s fs_temporal %0.3f"%(velocity_probe, fs_temporal), end="")
             append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
     #         stream_continue = 0
     #         print("Buffer %d is less than the frame count %d"%(len(buffer), N_CHUNK))
@@ -466,6 +462,3 @@ if __name__ == "__main__":
     stream.close()
 
     p.terminate
-
-    plt.plot(sig)
-    # plt.plot(spectrum_texture)
