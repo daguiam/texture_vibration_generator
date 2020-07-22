@@ -10,6 +10,7 @@ import time
 
 
 import win32gui
+import win32api
 
 
 
@@ -429,7 +430,6 @@ if __name__ == "__main__":
     while stream.is_active():
         
         
-
     #     if len(buffer) < N_audio_segment:
         if next_frame:
             next_frame = 0
