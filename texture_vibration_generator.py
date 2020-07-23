@@ -275,6 +275,28 @@ def callback(in_data, frame_count, time_info, status):
     else:
         return (data, pyaudio.paComplete)
 
+def create_texture(wavelength_texture, length_texture, N_texture, texture_height=0.1):
+
+    fs_spatial = N_texture/(length_texture)
+
+    velocity_probe = 1 # [mm/s]
+
+    k_texture = 2*np.pi/wavelength_texture
+
+    x = np.linspace(0, length_texture, N_texture, endpoint=True)
+    t = x/velocity_probe
+
+
+    texture_height = 0.1
+    texture =  signal.square(k_texture * x)
+    texture =  np.sin(k_texture * x)
+
+
+    # texture = np.abs(texture)
+    texture = np.power(texture,2)
+
+    texture = texture*texture_height
+    return (x,texture)
 
 
 def create_spectrum_texture(wavelength_texture, length_texture, N_texture, ):
@@ -302,7 +324,7 @@ def create_spectrum_texture(wavelength_texture, length_texture, N_texture, ):
     texture = np.power(texture,2)
 
     texture = texture*texture_height
-
+    x,texture = create_texture(wavelength_texture, length_texture, N_texture, texture_height=0.1)
 
     wavelength_probe = np.inf # [mm]
     length_probe = 5
