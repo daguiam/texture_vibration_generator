@@ -160,7 +160,7 @@ pyOpenSSL @ file:///tmp/build/80754af9/pyopenssl_1594392929924/work
 pyparsing==2.4.7
 pyreadline==2.1
 pyrsistent==0.16.0
-PySimpleGUI==4.15.2
+PySimpleGUI==4.26.0
 PySocks @ file:///C:/ci/pysocks_1594394709107/work
 pytest==5.4.3
 pytest-arraydiff==0.3

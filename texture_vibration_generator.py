@@ -61,6 +61,7 @@ class CircularBuffer (deque):
     def extractleft(self, n):
         """ Extracts n items from the left """
         return list(reversed([self.popleft() for i in range(n)]))
+    
         
         
 
