@@ -72,7 +72,7 @@ def callback(in_data, frame_count, time_info, status):
 
 
 
-def thread_PlayTexture(texture):
+def thread_PlayTexture_callback(texture):
     global zf
     global b,a
     global buffer
@@ -184,6 +184,100 @@ def thread_PlayTexture(texture):
 
 
 
+def thread_PlayTexture_blocking(texture):
+
+    global window
+    global velocity_probe
+
+    global flag_play_texture
+    
+    # Streaming audio buffer to output.
+    print("opened")
+
+
+    spectrum_texture = texture
+
+    N_audio_segment = 512# How big is the audio segment size
+    N_overlap = 128
+    N_CHUNK = N_audio_segment
+    
+    fs_audio = 8192
+    # ratio_fs = fs_audio/fs_temporal
+
+    velocity_probe = 1
+    # N_output = N_CHUNK
+    start_phase = 0
+
+    cutoff = 800
+
+
+
+    frame_list = []
+    #Initialize
+    sig = generate_audio_from_spectrum(spectrum_texture)
+    # sig = np.zeros(N_CHUNK)
+    # frequency = 0
+    # n_phase = 0
+    filter_order = 15
+
+    b,a = butter_lowpass_coefficients(cutoff, fs_audio,order=filter_order)
+    zf = signal.lfiltic(b,a,sig)
+
+    p = pyaudio.PyAudio()
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = fs_audio
+    CHUNK = spectrum_texture.size
+
+    buffer = CircularBuffer(maxlen=10*fs_audio)
+
+
+    # Opening the stream
+    stream = p.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    output=True,)
+
+
+
+
+    N_audio_segment = 1024 # How big is the audio segment size
+    N_audio_segment = 2048
+    N_overlap = 256
+    N_audio_segment = N_audio_segment+N_overlap
+
+    time_texture_sample_period = N_audio_segment/fs_audio
+    prev_time = time.time()
+
+
+    while (flag_play_texture):
+        # velocity_probe = cursor.speed()/500 +10
+        # gets velocity from global variable.
+
+
+        # Updates the window?
+        text = " %0.3f mm/s fs_temporal "%(velocity_probe, )
+        # print(text)
+        window['text_velocity'].update(text)
+
+        # starts new data
+        append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
+        
+        frame = np.copy(buffer.extractleft(N_audio_segment))
+        frame, zf = signal.lfilter(b, a, frame, zi=zf)
+        audio = array2audio(frame.real)
+        data = audio
+
+        stream.write(data)
+
+
+
+    stream.stop_stream()
+    stream.close()
+
+    p.terminate
+    print("Finished thread")
+
 
 
 if __name__ == "__main__":
@@ -193,6 +287,8 @@ if __name__ == "__main__":
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
     matplotlib.use("TkAgg")
+
+    global flag_play_texture
 
     def draw_figure(canvas, figure):
         figure_canvas_agg = FigureCanvasTkAgg(figure, canvas)
@@ -220,7 +316,7 @@ if __name__ == "__main__":
         [sg.Text("Plot test")],
         [sg.Canvas(key="-CANVAS_TEXTURE_PLOT-", size=(320, 240)) ],
         [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity", key='text_velocity')],
-        [sg.Button("Play")]
+        [sg.Button("Play"),sg.Button("Stop")]
     ]
 
     column2 = [
@@ -278,12 +374,13 @@ if __name__ == "__main__":
 
     window['text_velocity'].update("alksfjhaijhasjk")
 
-    threads = []
+    threads_texture = list()
 
     # Event Loop to process "events"
     while True:             
-        event, values = window.read(timeout=1000)
-
+        event, values = window.read(timeout=100)
+        velocity_probe = cursor.speed()/500 +10
+        window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
         # if event == sg.WIN_CLOSED or event == 'Exit':
         if event in ('Exit', None, 'Cancel'):
             break
@@ -292,11 +389,16 @@ if __name__ == "__main__":
             # start playing
             print("Playing")    
             # if len(threads) == 0:
-            x = threading.Thread(target=thread_PlayTexture, args=(spectrum_texture,))
-            threads.append(x)
+            if len(threads_texture):
+                flag_play_texture = False
+                threads_texture.clear()
+
+            flag_play_texture = True
+            x = threading.Thread(target=thread_PlayTexture_blocking, args=(spectrum_texture,), daemon=True)
+            threads_texture.append(x)
+            
             x.start()
-            pass
-
-
-
+            
+        if event in ('Stop'):
+            flag_play_texture = False
     window.close()
