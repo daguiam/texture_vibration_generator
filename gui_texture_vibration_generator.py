@@ -141,29 +141,35 @@ if __name__ == "__main__":
 
 
 
-    
+    sg.theme('SystemDefaultForReal') 
+    # sg.theme('SystemDefault')
+    # sg.theme('SystemDefault1') 
+ 
+
 # ------ Menu Definition ------ #      
     menu_def = [['File', ['Exit']],            
             ['Help', 'About...'], ]      
 
     column1 = [
-        [sg.Text("Plot test")],
+        [sg.Text("Surface texture and spectrum")],
+        [sg.Listbox(values=('Synthetic 1', 'Sample A', 'Sample B'), size=(30, 6), key='listbox_texture_input'),],
         [sg.Canvas(key="-CANVAS_TEXTURE_PLOT-", size=(320, 240)) ],
-        [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity mm/s", key='text_velocity')],
-        [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
-
-        [sg.Button("Play"),sg.Button("Stop")]
+        
     ]
 
     column2 = [
-        [sg.Text("Sound plot")]
+        [sg.Text("Sound plot")],
+        [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity mm/s", key='text_velocity')],
+        [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
+
+        [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
     ]
 
     # Define the window layout
     layout = [
         [sg.Menu(menu_def, tearoff=True)],  
-        [sg.Column(column1), sg.Column(column2)],
-        [sg.OK(), sg.Cancel()]
+        [sg.Column(column1),sg.VerticalSeparator(), sg.Column(column2)],
+        # [sg.OK(), sg.Cancel()]
     ]
 
     # Create the form and show it without the plot
@@ -202,6 +208,8 @@ if __name__ == "__main__":
         plt.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
         plt.xlabel('k [1/mm]')
         plt.ylabel('A [a.u.]')
+
+        plt.xlim(xmin=0)
         plt.subplots_adjust(hspace=0.4, left=0.15)
 
         window["-CANVAS_TEXTURE_PLOT-"].set_tooltip('Texture spectrum')
@@ -219,14 +227,14 @@ if __name__ == "__main__":
 
         buffer_velocity.extend([velocity_probe])
         buffer_velocity_t.extend([time.time()])
-        figure_velocity = plt.figure(figsize=(4,2))
+        figure_velocity,ax = plt.subplots(figsize=(4,2))
 
 
         plt.plot(np.array(buffer_velocity_t)-np.array(buffer_velocity_t)[0], buffer_velocity)
         
         plt.xlabel('Time')
         plt.ylabel('Velocity [mm/s]')
-        plt.subplots_adjust( bottom=0.3, left=0.15)
+        plt.subplots_adjust( bottom=0.25, left=0.15)
 
         window["-CANVAS_TEXTURE_PLOT-"].set_tooltip('Velocity plot')
         agg_velocity = draw_figure(window["-CANVAS_VELOCITY_PLOT-"].TKCanvas, figure_velocity)
@@ -253,6 +261,10 @@ if __name__ == "__main__":
             ax.cla()
             ax.plot(np.array(buffer_velocity_t)-np.array(buffer_velocity_t)[-1], buffer_velocity)
             ax.set_xlim(-20,0)
+            
+            ax.set_xlabel('Time [s]')
+            ax.set_ylabel('Velocity [mm/s]')
+            # plt.subplots_adjust( bottom=0.6, left=0.15)
             agg_velocity.draw()
 
 
@@ -262,7 +274,11 @@ if __name__ == "__main__":
 
             break
 
-        if event in ('Play'):
+        
+        print("akjsdhjkas", values['listbox_texture_input'], values)
+
+
+        if event in ('btn_play'):
             logging.info("Main    : Play")
            # start playing
             # if len(threads) == 0:
@@ -278,7 +294,7 @@ if __name__ == "__main__":
             
             x.start()
             
-        if event in ('Stop'):
+        if event in ('btn_stop'):
             logging.info("Main    : Stop")
 
             flag_play_texture = False
