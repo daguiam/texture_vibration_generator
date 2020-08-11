@@ -249,8 +249,8 @@ if __name__ == "__main__":
 
     # Event Loop to process "events"
     while True:             
-        event, values = window.read(timeout=10)
-        velocity_probe = cursor.speed()/500 +10
+        event, values = window.read(timeout=100)
+        velocity_probe = cursor.speed()/200 +10*0
         window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
 
         # add to velocity figure
@@ -275,7 +275,7 @@ if __name__ == "__main__":
             break
 
         
-        print("akjsdhjkas", values['listbox_texture_input'], values)
+        # print("akjsdhjkas", values['listbox_texture_input'], values)
 
 
         if event in ('btn_play'):
