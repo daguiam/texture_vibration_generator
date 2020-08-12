@@ -141,7 +141,8 @@ def thread_PlayTexture_blocking():
 
 list_of_textures = ('Texture 1', 'Texture 2', 'Texture 3')
 
-gui_timetout = 100  #ms
+gui_timetout = 10  #ms
+gui_plot_velocity_time = 50
 
 base_velocity = 0
 max_samples_velocity = 200
@@ -282,6 +283,9 @@ if __name__ == "__main__":
 
     threads_texture = list()
 
+    curr_time_plot = time.time()
+    prev_time_plot = curr_time_plot
+
     # Event Loop to process "events"
     while True:             
         event, values = window.read(timeout=gui_timetout)
@@ -295,16 +299,19 @@ if __name__ == "__main__":
         if 1:
             buffer_velocity.extend([velocity_probe])
             buffer_velocity_t.extend([time.time()])
-            ax = figure_velocity.axes[0]
-            ax.cla()
-            ax.plot(np.array(buffer_velocity_t)-np.array(buffer_velocity_t)[-1], buffer_velocity)
-            ax.set_xlim(-20,0)
-            
-            ax.set_xlabel('Time [s]')
-            ax.set_ylabel('Velocity [mm/s]')
-            # plt.subplots_adjust( bottom=0.6, left=0.15)
-            agg_velocity.draw()
+            curr_time_plot = time.time()
 
+            if curr_time_plot - prev_time_plot > gui_plot_velocity_time/1000:
+                ax = figure_velocity.axes[0]
+                ax.cla()
+                ax.plot(np.array(buffer_velocity_t)-np.array(buffer_velocity_t)[-1], buffer_velocity)
+                ax.set_xlim(-20,0)
+                
+                ax.set_xlabel('Time [s]')
+                ax.set_ylabel('Velocity [mm/s]')
+                # plt.subplots_adjust( bottom=0.6, left=0.15)
+                agg_velocity.draw()
+                prev_time_plot = curr_time_plot
 
         # if event == sg.WIN_CLOSED or event == 'Exit':
         if event in ('Exit', None, 'Cancel'):
