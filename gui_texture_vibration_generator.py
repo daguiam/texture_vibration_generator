@@ -33,18 +33,18 @@ def thread_PlayTexture_blocking():
     # Streaming audio buffer to output.
     logging.info("Thread  : Starting")
 
-    N_audio_segment = 512# How big is the audio segment size
-    N_overlap = 128
-    N_CHUNK = N_audio_segment
+    # N_audio_segment = 512# How big is the audio segment size
+    # N_overlap = 128
+    # N_CHUNK = N_audio_segment
     
     fs_audio = 8192
     # ratio_fs = fs_audio/fs_temporal
 
-    velocity_probe = 1
+    # velocity_probe = 1
     # N_output = N_CHUNK
     start_phase = 0
 
-    cutoff = 800
+    cutoff = 400
 
 
 
@@ -63,9 +63,10 @@ def thread_PlayTexture_blocking():
     FORMAT = pyaudio.paInt16
     CHANNELS = 1
     RATE = fs_audio
-    CHUNK = spectrum_texture.size
+    # CHUNK = spectrum_texture.size
 
     buffer = CircularBuffer(maxlen=10*fs_audio)
+    # buffer = CircularBuffer(maxlen=2048)
 
 
     # Opening the stream
@@ -78,26 +79,53 @@ def thread_PlayTexture_blocking():
 
 
     N_audio_segment = 1024 # How big is the audio segment size
-    # N_audio_segment = 2048
-    N_overlap = 256
+    N_audio_segment = 512*4
+    N_overlap = 256*0
     N_audio_segment = N_audio_segment+N_overlap
 
     time_texture_sample_period = N_audio_segment/fs_audio
     prev_time = time.time()
+    prev_time2 = time.time()
 
-
+    data = np.zeros(N_audio_segment)
     while (flag_play_texture):
         # velocity_probe = cursor.speed()/500 +10
         # gets velocity from global variable.
         # starts new data
+
+        stream.write(data)
+
+        velocity_probe = 15
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
+
+
+        frames_available = stream.get_write_available()
+        output_latency = stream.get_output_latency()
+
+        logging.info("Write available %d, latency %f"%(frames_available,output_latency))
+
+
+        # logging.info("Buffer size before %d"%(len(buffer)))
+        # frame = np.copy(buffer.extractleft(frames_available))
+
         frame = np.copy(buffer.extractleft(N_audio_segment))
+        # zf = None
+        # logging.info("Buffer size %d"%(len(buffer)))
         frame, zf = signal.lfilter(b, a, frame, zi=zf)
         audio = array2audio(frame.real)
         data = audio
+        # data = np.repeat(data,2)
 
-        stream.write(data)
+
+        # stream.write(data)
+        curr_time = time.time()
+        logging.info("Time delta %0.4f %0.4f and %0.4f s %f"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe))
+
+        # logging.info("Write available %d"%(stream.get_write_available()))
+        
+        prev_time2 = prev_time
+        prev_time = curr_time
 
 
 
@@ -113,7 +141,10 @@ def thread_PlayTexture_blocking():
 
 list_of_textures = ('Texture 1', 'Texture 2', 'Texture 3')
 
-gui_timetout = 10  #ms
+gui_timetout = 100  #ms
+
+base_velocity = 0
+max_samples_velocity = 200
 
 if __name__ == "__main__":
     import matplotlib
@@ -131,7 +162,7 @@ if __name__ == "__main__":
         figure_canvas_agg.get_tk_widget().pack(side="left",  expand=1)
         return figure_canvas_agg
 
-    format = "%(asctime)s: %(message)s"
+    format = "%(asctime)s.%(msecs)03d: %(message)s"
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
 
@@ -224,7 +255,6 @@ if __name__ == "__main__":
     if 1:
         cursor = Cursor()
 
-        max_samples_velocity = 200
         buffer_velocity = CircularBuffer(maxlen=max_samples_velocity)
         buffer_velocity_t = CircularBuffer(maxlen=max_samples_velocity)
 
@@ -255,10 +285,10 @@ if __name__ == "__main__":
     # Event Loop to process "events"
     while True:             
         event, values = window.read(timeout=gui_timetout)
-        print("Read events", values['listbox_texture_input'], values)
+        # print("Read events", values['listbox_texture_input'], values)
 
 
-        velocity_probe = cursor.speed()/200 +10*1
+        velocity_probe = cursor.speed()/200 + base_velocity
         window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
 
         # add to velocity figure
@@ -324,9 +354,9 @@ if __name__ == "__main__":
                 wavelength_texture = 1/20 # [mm]
 
             else:
-                wavelength_texture = 1/50 # [mm]
+                wavelength_texture = 1/30 # [mm]
 
-            print("Wavelength texture", wavelength_texture,selected_texture)
+            # print("Wavelength texture", wavelength_texture,selected_texture)
             length_texture = 1
             x, texture = create_texture(wavelength_texture, length_texture, N_texture)
             spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )

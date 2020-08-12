@@ -229,6 +229,8 @@ def append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_
     window = window_easing(N_audio_segment, N_overlap)
     # Remove the overlap samples
     sig_frame = sig_frame*window
+
+
     if len(buffer)>N_overlap:
         tail = np.array(buffer.extract(N_overlap))
 
