@@ -78,7 +78,7 @@ def thread_PlayTexture_blocking():
 
 
     N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 2048
+    # N_audio_segment = 2048
     N_overlap = 256
     N_audio_segment = N_audio_segment+N_overlap
 
@@ -109,6 +109,11 @@ def thread_PlayTexture_blocking():
     logging.info("Thread  : Stopping")
 
 
+
+
+list_of_textures = ('Texture 1', 'Texture 2', 'Texture 3')
+
+gui_timetout = 10  #ms
 
 if __name__ == "__main__":
     import matplotlib
@@ -152,7 +157,7 @@ if __name__ == "__main__":
 
     column1 = [
         [sg.Text("Surface texture and spectrum")],
-        [sg.Listbox(values=('Synthetic 1', 'Sample A', 'Sample B'), size=(30, 6), key='listbox_texture_input'),],
+        [sg.Listbox(values=list_of_textures, default_values=list_of_textures[0], size=(30, 6), key='listbox_texture_input'),],
         [sg.Canvas(key="-CANVAS_TEXTURE_PLOT-", size=(320, 240)) ],
         
     ]
@@ -249,8 +254,11 @@ if __name__ == "__main__":
 
     # Event Loop to process "events"
     while True:             
-        event, values = window.read(timeout=100)
-        velocity_probe = cursor.speed()/200 +10*0
+        event, values = window.read(timeout=gui_timetout)
+        print("Read events", values['listbox_texture_input'], values)
+
+
+        velocity_probe = cursor.speed()/200 +10*1
         window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
 
         # add to velocity figure
@@ -275,7 +283,6 @@ if __name__ == "__main__":
             break
 
         
-        # print("akjsdhjkas", values['listbox_texture_input'], values)
 
 
         if event in ('btn_play'):
@@ -298,4 +305,48 @@ if __name__ == "__main__":
             logging.info("Main    : Stop")
 
             flag_play_texture = False
+
+
+
+
+
+            
+        # Updating the spectrum texture         
+        # creating analytical spectrum texture
+        if 1:
+            N_texture = 512*1
+
+            selected_texture = values['listbox_texture_input'][0]
+            if selected_texture.lower() in ["texture 1"]:
+
+                wavelength_texture = 1/10 # [mm]
+            elif selected_texture.lower() in ["texture 2"]:
+                wavelength_texture = 1/20 # [mm]
+
+            else:
+                wavelength_texture = 1/50 # [mm]
+
+            print("Wavelength texture", wavelength_texture,selected_texture)
+            length_texture = 1
+            x, texture = create_texture(wavelength_texture, length_texture, N_texture)
+            spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
+            
+            axes = figure_texture.axes
+            
+            ax = axes[0]
+            ax.cla()
+            ax.plot(x,texture)
+            ax.set_xlabel('x [mm]')
+            ax.set_ylabel('y [mm]')
+            
+            ax = axes[1]
+            ax.cla()
+            ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
+            ax.set_xlabel('k [1/mm]')
+            ax.set_ylabel('A [a.u.]')
+
+            ax.set_xlim(xmin=0)
+            # plt.subplots_adjust(hspace=0.4, left=0.15)
+            agg_texture.draw()
+
     window.close()
