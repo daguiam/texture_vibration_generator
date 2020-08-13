@@ -139,7 +139,9 @@ def thread_PlayTexture_blocking():
 
 
 
-list_of_textures = ('Texture 1', 'Texture 2', 'Texture 3')
+list_of_textures = ['Texture 1', 'Texture 2', 'Texture 3']
+list_of_output_devices = []
+list_of_output_devices_selected = None
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
@@ -176,6 +178,24 @@ if __name__ == "__main__":
 
     # plt.plot(t,y)
 
+    # Listing output devices
+    if 1:
+        logging.info("Main    : Listing output stream devices")
+        p = pyaudio.PyAudio()
+        info = p.get_host_api_info_by_index(0)
+        num_devices = info.get('deviceCount')
+        for device_id in range(num_devices):
+            device = p.get_device_info_by_host_api_device_index(0,device_id)
+        #     pprint.pprint(device)
+            if device.get('maxOutputChannels') > 0:
+                name = device.get('name')
+                if "Cypress" in name:
+                    list_of_output_devices_selected = name
+                list_of_output_devices.append(name)
+                
+                logging.info("Output devices : [%d] %s"%(device.get('index'),device.get('name'),))
+                
+
 
 
     sg.theme('SystemDefaultForReal') 
@@ -198,7 +218,8 @@ if __name__ == "__main__":
         [sg.Text("Sound plot")],
         [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity mm/s", key='text_velocity')],
         [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
-
+        [sg.Text("Select output device")],
+        [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),],
         [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
     ]
 
@@ -333,6 +354,7 @@ if __name__ == "__main__":
                     threads_texture.remove(thread)
 
             flag_play_texture = True
+            list_of_output_devices_selected
             x = threading.Thread(target=thread_PlayTexture_blocking, args=(), daemon=True)
             threads_texture.append(x)
             
