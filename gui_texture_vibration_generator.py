@@ -133,7 +133,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
     stream.stop_stream()
     stream.close()
 
-    p.terminate
+    p.terminate()
     
     logging.info("Thread  : Stopping")
 
@@ -198,6 +198,7 @@ if __name__ == "__main__":
                 
                 logging.info("Output devices : [%d] %s"%(device.get('index'),device.get('name'),))
                 
+        p.terminate()
 
 
 
@@ -387,6 +388,31 @@ if __name__ == "__main__":
             logging.info("Main    : Stop")
 
             flag_play_texture = False
+
+
+        if event in ('btn_refresh_devices'):
+            logging.info("Main    : Refreshing device list")
+
+            list_of_output_devices = []
+            logging.info("Main    : Listing output stream devices")
+            p = pyaudio.PyAudio()
+            info = p.get_host_api_info_by_index(0)
+            num_devices = info.get('deviceCount')
+            
+            for device_id in range(num_devices):
+                device = p.get_device_info_by_host_api_device_index(0,device_id)
+            #     pprint.pprint(device)
+                if device.get('maxOutputChannels') > 0:
+                    name = device.get('name')
+                    if "Cypress" in name:
+                        list_of_output_devices_selected = name
+                        list_of_output_devices_selected_device_id = device.get('index')
+                    list_of_output_devices.append(name)
+                    
+                    logging.info("Output devices : [%d] %s"%(device.get('index'),device.get('name'),))
+            window['listbox_output_devices'].update(list_of_output_devices)
+            window['listbox_output_devices'].SetValue(list_of_output_devices_selected)
+            p.terminate()
 
 
 
