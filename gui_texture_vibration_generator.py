@@ -96,7 +96,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         stream.write(data)
 
-        velocity_probe = 10
+
+        # velocity_probe += 10
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
 
@@ -151,6 +152,8 @@ gui_plot_velocity_time = 50
 base_velocity = 0
 max_samples_velocity = 200
 
+DEBUG_VERBOSE = True
+
 if __name__ == "__main__":
     import matplotlib
     import PySimpleGUI as sg
@@ -168,7 +171,11 @@ if __name__ == "__main__":
         return figure_canvas_agg
 
     format = "%(asctime)s.%(msecs)03d: %(message)s"
-    logging.basicConfig(format=format, level=logging.INFO,
+    if DEBUG_VERBOSE:
+        logging.basicConfig(format=format, level=logging.DEBUG,
+                            datefmt="%H:%M:%S")
+    else:
+        logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
 
     logging.info("Main    : Started program")
