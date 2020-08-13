@@ -22,7 +22,7 @@ from texture_vibration_generator import *
 
 
 
-def thread_PlayTexture_blocking():
+def thread_PlayTexture_blocking(output_device_index=None):
 
     global window
     global velocity_probe
@@ -73,7 +73,8 @@ def thread_PlayTexture_blocking():
     stream = p.open(format=FORMAT,
                     channels=CHANNELS,
                     rate=RATE,
-                    output=True,)
+                    output=True,
+                    output_device_index=output_device_index,)
 
 
 
@@ -142,6 +143,7 @@ def thread_PlayTexture_blocking():
 list_of_textures = ['Texture 1', 'Texture 2', 'Texture 3']
 list_of_output_devices = []
 list_of_output_devices_selected = None
+list_of_output_devices_selected_device_id = None
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
@@ -191,6 +193,7 @@ if __name__ == "__main__":
                 name = device.get('name')
                 if "Cypress" in name:
                     list_of_output_devices_selected = name
+                    list_of_output_devices_selected_device_id = device.get('index')
                 list_of_output_devices.append(name)
                 
                 logging.info("Output devices : [%d] %s"%(device.get('index'),device.get('name'),))
@@ -218,7 +221,7 @@ if __name__ == "__main__":
         [sg.Text("Sound plot")],
         [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity mm/s", key='text_velocity')],
         [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
-        [sg.Text("Select output device")],
+        [sg.Text("Select output device [Cypress]"),sg.Button("Refresh", key='btn_refresh_devices')],
         [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),],
         [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
     ]
@@ -354,8 +357,28 @@ if __name__ == "__main__":
                     threads_texture.remove(thread)
 
             flag_play_texture = True
-            list_of_output_devices_selected
-            x = threading.Thread(target=thread_PlayTexture_blocking, args=(), daemon=True)
+            
+            
+            # Selecting output device_id from list_box
+            if 1:
+                selected_output_device = values['listbox_output_devices'][0]
+
+                p = pyaudio.PyAudio()
+                info = p.get_host_api_info_by_index(0)
+                num_devices = info.get('deviceCount')
+                device_index = None
+                for device_id in range(num_devices):
+                    device = p.get_device_info_by_host_api_device_index(0,device_id)
+                #     pprint.pprint(device)
+                    if device.get('maxOutputChannels') > 0:
+                        name = device.get('name')
+                        if selected_output_device == name:
+                            device_index = device.get('index')
+                        
+                            logging.info("Main    : Play output on [%d] %s"%(device.get('index'),device.get('name'),))
+                            break
+                        
+            x = threading.Thread(target=thread_PlayTexture_blocking, args=([device_index]), daemon=True)
             threads_texture.append(x)
             
             x.start()
