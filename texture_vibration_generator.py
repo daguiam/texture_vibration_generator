@@ -224,19 +224,21 @@ def window_easing(n, easing=None):
 
 def append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap ):
 
-    t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
+    N_frame = N_audio_segment 
+    N_frame = N_audio_segment + N_overlap
+    t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_frame, fs_audio, )
 
-    window = window_easing(N_audio_segment, N_overlap)
+    window = window_easing(N_frame, N_overlap)
     # Remove the overlap samples
     sig_frame = sig_frame*window
 
 
+    # print("sig frame 1",len(sig_frame), len(buffer))
     if len(buffer)>N_overlap:
         tail = np.array(buffer.extract(N_overlap))
 
         sig_frame[:N_overlap] = sig_frame[:N_overlap]+tail
-
-    
+        # print("sig frame 2",len(sig_frame), len(tail))
 #     print(sig_frame)
     buffer.extend(list(sig_frame.real))
     return 

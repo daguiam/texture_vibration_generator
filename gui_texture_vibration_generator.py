@@ -81,8 +81,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
     N_audio_segment = 1024 # How big is the audio segment size
     N_audio_segment = 512*4
-    N_overlap = 256*0
-    N_audio_segment = N_audio_segment+N_overlap
+    N_overlap = 256*1
+    # N_audio_segment = N_audio_segment+N_overlap
 
     time_texture_sample_period = N_audio_segment/fs_audio
     prev_time = time.time()
@@ -96,7 +96,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         stream.write(data)
 
-        velocity_probe = 15
+        velocity_probe = 10
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
 
@@ -104,7 +104,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
         frames_available = stream.get_write_available()
         output_latency = stream.get_output_latency()
 
-        logging.info("Write available %d, latency %f"%(frames_available,output_latency))
+        logging.debug("Write available %d, latency %f"%(frames_available,output_latency))
 
 
         # logging.info("Buffer size before %d"%(len(buffer)))
@@ -121,7 +121,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         # stream.write(data)
         curr_time = time.time()
-        logging.info("Time delta %0.4f %0.4f and %0.4f s %f"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe))
+        logging.debug("Time delta %0.4f %0.4f and %0.4f s %f"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe))
 
         # logging.info("Write available %d"%(stream.get_write_available()))
         
