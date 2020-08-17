@@ -98,6 +98,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
         # velocity_probe += 10
+        velocity_probe = 15
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
 
@@ -152,7 +153,9 @@ gui_plot_velocity_time = 50
 base_velocity = 0
 max_samples_velocity = 200
 
-DEBUG_VERBOSE = True
+DEBUG_VERBOSE = False
+# DEBUG_VERBOSE = True
+
 
 if __name__ == "__main__":
     import matplotlib
