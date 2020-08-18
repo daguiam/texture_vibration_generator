@@ -98,7 +98,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
         # velocity_probe += 10
-        velocity_probe = 15
+        # velocity_probe = 15
         append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
 
@@ -459,7 +459,7 @@ if __name__ == "__main__":
             
             ax = axes[1]
             ax.cla()
-            ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
+            ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture), d=1/fs_spatial)),np.abs(spectrum_texture))
             ax.set_xlabel('k [1/mm]')
             ax.set_ylabel('A [a.u.]')
 

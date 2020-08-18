@@ -303,15 +303,16 @@ def create_texture(wavelength_texture, length_texture, N_texture, texture_height
     return (x,texture)
 
 
-def create_spectrum_texture(wavelength_texture, length_texture, N_texture, ):
+def create_spectrum_texture(wavelength_texture, length_texture, N_texture, velocity_probe=1):
     
     # N_texture = 512*1
     # wavelength_texture = 1/5 # [mm]
     # wavelength_texture = 1/10 # [mm]
     # length_texture = 1
     fs_spatial = N_texture/(length_texture)
+    # print("fs_spatial,",fs_spatial)
 
-    velocity_probe = 1 # [mm/s]
+    # velocity_probe = 1 # [mm/s]
 
     k_texture = 2*np.pi/wavelength_texture
 
