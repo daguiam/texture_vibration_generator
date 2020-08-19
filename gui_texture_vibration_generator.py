@@ -151,7 +151,7 @@ json_filename = os.path.join("textures", "textures.json")
 with open(json_filename) as json_file:
     textures_dictionary = json.load(json_file)
 
-list_of_textures = list(textures_dictionary.keys())
+list_of_textures += list(textures_dictionary.keys())
 
 
 list_of_output_devices = []
@@ -446,36 +446,63 @@ if __name__ == "__main__":
             N_texture = 512*1
 
             selected_texture = values['listbox_texture_input'][0]
-            if selected_texture.lower() in ["texture 1"]:
 
-                wavelength_texture = 1/10 # [mm]
-            elif selected_texture.lower() in ["texture 2"]:
-                wavelength_texture = 1/20 # [mm]
+            if selected_texture.lower() in ["texture 1", "texture 2", "texture 3"]:
+                if selected_texture.lower() in ["texture 1"]:
 
+                    wavelength_texture = 1/10 # [mm]
+                elif selected_texture.lower() in ["texture 2"]:
+                    wavelength_texture = 1/20 # [mm]
+
+                else:
+                    wavelength_texture = 1/30 # [mm]
+                
+                    
+                # print("Wavelength texture", wavelength_texture,selected_texture)
+                length_texture = 1
+                x, texture = create_texture(wavelength_texture, length_texture, N_texture)
+                spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
+                
+                axes = figure_texture.axes
+                
+                ax = axes[0]
+                ax.cla()
+                ax.plot(x,texture)
+                ax.set_xlabel('x [mm]')
+                ax.set_ylabel('y [mm]')
+                
+                ax = axes[1]
+                ax.cla()
+                ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture), d=1/fs_spatial)),np.abs(spectrum_texture))
+                ax.set_xlabel('k [1/mm]')
+                ax.set_ylabel('A [a.u.]')
+
+                ax.set_xlim(xmin=0)
+                # plt.subplots_adjust(hspace=0.4, left=0.15)
+                agg_texture.draw()
             else:
-                wavelength_texture = 1/30 # [mm]
 
-            # print("Wavelength texture", wavelength_texture,selected_texture)
-            length_texture = 1
-            x, texture = create_texture(wavelength_texture, length_texture, N_texture)
-            spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
-            
-            axes = figure_texture.axes
-            
-            ax = axes[0]
-            ax.cla()
-            ax.plot(x,texture)
-            ax.set_xlabel('x [mm]')
-            ax.set_ylabel('y [mm]')
-            
-            ax = axes[1]
-            ax.cla()
-            ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture), d=1/fs_spatial)),np.abs(spectrum_texture))
-            ax.set_xlabel('k [1/mm]')
-            ax.set_ylabel('A [a.u.]')
+                texture_file = textures_dictionary[selected_texture]
+                freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
+                spectrum = spectrum/np.max(spectrum)
+                spectrum_texture = spectrum
+                
+                
 
-            ax.set_xlim(xmin=0)
-            # plt.subplots_adjust(hspace=0.4, left=0.15)
-            agg_texture.draw()
+                axes = figure_texture.axes
+                # clar first axis
+                ax = axes[0]
+                ax.cla()
+
+
+                ax = axes[1]
+                ax.cla()
+                ax.plot(freqs, spectrum)
+                ax.set_xlabel('k [1/mm]')
+                ax.set_ylabel('A [a.u.]')
+                ax.set_xlim(xmin=0)
+
+                agg_texture.draw()
+
 
     window.close()
