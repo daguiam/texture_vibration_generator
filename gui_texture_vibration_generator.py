@@ -47,20 +47,29 @@ def thread_PlayTexture_blocking(output_device_index=None):
     # N_output = N_CHUNK
     start_phase = 0
 
-    cutoff = 400
+    # cutoff = 400
 
 
 
     frame_list = []
     #Initialize
     sig = generate_audio_from_spectrum(spectrum_texture)
+    sig = np.zeros(sig.size)
     # sig = np.zeros(N_CHUNK)
     # frequency = 0
     # n_phase = 0
-    filter_order = 15
+    filter_order = 3
 
-    b,a = butter_lowpass_coefficients(cutoff, fs_audio,order=filter_order)
-    zf = signal.lfiltic(b,a,sig)
+    lowcut = 50
+    highcut = 400
+
+    b,a = butter_lowpass_coefficients(highcut, fs_audio,order=filter_order)
+    b,a = butter_bandpass(lowcut, highcut, fs_audio, order=filter_order)
+    # b,a = butter_bandpass(2, 400, fs_audio, order=filter_order)
+
+    zf = signal.lfiltic(b,a, sig)
+    
+    # print("zf",zf)
 
     p = pyaudio.PyAudio()
     FORMAT = pyaudio.paInt16
@@ -83,8 +92,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
     N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 512*4
-    N_overlap = 256*1
+    N_audio_segment = 512*2
+    N_overlap = 256*0
     # N_audio_segment = N_audio_segment+N_overlap
 
     time_texture_sample_period = N_audio_segment/fs_audio
@@ -102,7 +111,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         # velocity_probe += 10
         # velocity_probe = 15
-        append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
+        added_size = append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
         
 
 
@@ -111,15 +120,41 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         logging.debug("Write available %d, latency %f"%(frames_available,output_latency))
 
+        logging.info("Size of buffer: %d, added %d"%(len(buffer),added_size))
 
         # logging.info("Buffer size before %d"%(len(buffer)))
         # frame = np.copy(buffer.extractleft(frames_available))
 
-        frame = np.copy(buffer.extractleft(N_audio_segment))
+        # frame = np.copy(buffer.extractleft(N_audio_segment))
+        # frame = np.copy(buffer.extract(added_size))
+
+        t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
+        frame = sig_frame
         # zf = None
         # logging.info("Buffer size %d"%(len(buffer)))
-        frame, zf = signal.lfilter(b, a, frame, zi=zf)
-        audio = array2audio(frame.real)
+        # print("ptp", np.ptp(frame))
+        # print("ptp", np.ptp(frame), np.mean(frame))
+
+        # print("Frame max:", np.max(frame.real))
+
+        # frame, zf = signal.lfilter(b, a, frame, zi=zf)
+        frame = signal.lfilter(b, a, frame, )
+
+        # print("ptpfilt", np.ptp(frame), np.mean(frame))
+
+        # frame *= np.hamming(frame.size)
+
+        # frame = frame*output_volume/100
+        # frame = frame/np.max(frame)*output_volume/100
+        
+        # assert np.max(frame.real)<=1, "Frame overflowed amplitude=1"
+        # print("Frame max:", np.max(frame.real))
+
+        if np.max(frame.real)>=1:
+            print("Overflowed amplitude: %f"%(np.max(frame.real)))
+            logging.info("Overflowed amplitude: %f"%(np.max(frame.real)))
+            continue
+        audio = array2audio(frame.real, max_amplitude=2)
         data = audio
         # data = np.repeat(data,2)
 
@@ -151,17 +186,19 @@ json_filename = os.path.join("textures", "textures.json")
 with open(json_filename) as json_file:
     textures_dictionary = json.load(json_file)
 
-list_of_textures += list(textures_dictionary.keys())
+textures_gain = 1/100
+list_of_textures += sorted(textures_dictionary.keys())
 
 
 list_of_output_devices = []
 list_of_output_devices_selected = None
 list_of_output_devices_selected_device_id = None
+output_volume = 20
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
 
-base_velocity = 0
+base_velocity = 10
 max_samples_velocity = 200
 
 DEBUG_VERBOSE = False
@@ -241,10 +278,16 @@ if __name__ == "__main__":
 
     column2 = [
         [sg.Text("Sound plot")],
-        [sg.Checkbox('Measure Velocity', default=True), sg.Text("Velocity mm/s", key='text_velocity')],
+        [ sg.Text("Velocity mm/s", key='text_velocity'),
+            sg.Checkbox('Add base velocity', default=True, key='checkbox_base_velocity'),
+            sg.Slider(range=(0, 30), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
         [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
         [sg.Text("Select output device [Cypress]"),sg.Button("Refresh", key='btn_refresh_devices')],
-        [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),],
+        [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),
+          sg.Column(
+              [[sg.Text('Volume')],
+            [sg.Slider(range=(0, 100), orientation='v', size=(6, 10), default_value=output_volume, tick_interval=20, key='slider_output_volume')],
+            ]), ],
         [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
     ]
 
@@ -281,19 +324,19 @@ if __name__ == "__main__":
         x, texture = create_texture(wavelength_texture, length_texture, N_texture)
         spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
         
-        figure_texture,ax = plt.subplots(2,1, figsize=(4,4))
-        plt.sca(ax[0])
-        plt.plot(x,texture)
-        plt.xlabel('x [mm]')
-        plt.ylabel('y [mm]')
+        figure_texture,ax = plt.subplots(1,1, figsize=(4,2))
+        # plt.sca(ax[0])
+        # plt.plot(x,texture)
+        # plt.xlabel('x [mm]')
+        # plt.ylabel('y [mm]')
         
-        plt.sca(ax[1])
+        # plt.sca(ax[1])
         plt.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
         plt.xlabel('k [1/mm]')
         plt.ylabel('A [a.u.]')
 
         plt.xlim(xmin=0)
-        plt.subplots_adjust(hspace=0.4, left=0.15)
+        plt.subplots_adjust(hspace=0.4, left=0.15, bottom=0.25)
 
         window["-CANVAS_TEXTURE_PLOT-"].set_tooltip('Texture spectrum')
         agg_texture = draw_figure(window["-CANVAS_TEXTURE_PLOT-"].TKCanvas, figure_texture)
@@ -318,7 +361,7 @@ if __name__ == "__main__":
         plt.ylabel('Velocity [mm/s]')
         plt.subplots_adjust( bottom=0.25, left=0.15)
 
-        window["-CANVAS_TEXTURE_PLOT-"].set_tooltip('Velocity plot')
+        window["-CANVAS_VELOCITY_PLOT-"].set_tooltip('Velocity plot')
         agg_velocity = draw_figure(window["-CANVAS_VELOCITY_PLOT-"].TKCanvas, figure_velocity)
 
 
@@ -340,6 +383,13 @@ if __name__ == "__main__":
 
         velocity_probe = cursor.speed()/200 + base_velocity
         window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
+
+        output_volume = values['slider_output_volume']
+
+        if values['checkbox_base_velocity']:
+            base_velocity = values['slider_base_velocity']
+        else:
+            base_velocity = 0
 
         # add to velocity figure
         if 1:
@@ -410,7 +460,6 @@ if __name__ == "__main__":
 
             flag_play_texture = False
 
-
         if event in ('btn_refresh_devices'):
             logging.info("Main    : Refreshing device list")
 
@@ -453,6 +502,7 @@ if __name__ == "__main__":
                     wavelength_texture = 1/10 # [mm]
                 elif selected_texture.lower() in ["texture 2"]:
                     wavelength_texture = 1/20 # [mm]
+                    wavelength_texture = [1/20, 1/20]
 
                 else:
                     wavelength_texture = 1/30 # [mm]
@@ -463,15 +513,20 @@ if __name__ == "__main__":
                 x, texture = create_texture(wavelength_texture, length_texture, N_texture)
                 spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
                 
+                spectrum_texture = np.abs(spectrum_texture)
+                spectrum_texture /= np.max( np.abs(spectrum_texture))
+                # spectrum_texture *= output_volume
+
                 axes = figure_texture.axes
-                
                 ax = axes[0]
-                ax.cla()
-                ax.plot(x,texture)
-                ax.set_xlabel('x [mm]')
-                ax.set_ylabel('y [mm]')
+                # ax = axes[0]
+                # ax.cla()
+                # ax.plot(x,texture)
+                # ax.set_xlabel('x [mm]')
+                # ax.set_ylabel('y [mm]')
                 
-                ax = axes[1]
+                # ax = axes[1]
+                
                 ax.cla()
                 ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture), d=1/fs_spatial)),np.abs(spectrum_texture))
                 ax.set_xlabel('k [1/mm]')
@@ -484,9 +539,11 @@ if __name__ == "__main__":
 
                 texture_file = textures_dictionary[selected_texture]
                 freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
-                spectrum = spectrum/np.max(spectrum)
+                # spectrum = spectrum/np.max(spectrum)
                 spectrum_texture = spectrum
-                
+                spectrum_texture *= textures_gain
+                # spectrum_texture *= output_volume
+
                 
 
                 axes = figure_texture.axes
@@ -495,12 +552,14 @@ if __name__ == "__main__":
                 ax.cla()
 
 
-                ax = axes[1]
+                # ax = axes[1]
                 ax.cla()
                 ax.plot(freqs, spectrum)
                 ax.set_xlabel('k [1/mm]')
                 ax.set_ylabel('A [a.u.]')
-                ax.set_xlim(xmin=0)
+                # ax.set_xlim(xmin=0, xmax=40)
+                ax.set_xlim(xmin=0, xmax=100)
+                ax.set_ylim(0,1)
 
                 agg_texture.draw()
 
