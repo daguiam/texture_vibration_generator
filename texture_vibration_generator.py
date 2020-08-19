@@ -187,6 +187,8 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
     if velocity_probe ==0 :
         #print("zero velocity")
         sig_frame = np.zeros(N_frame)
+        t_frame = np.linspace(0,sig_frame.size/fs_audio, sig_frame.size)
+
     else:
 
         # first get signal from texture sampled at fs_spatial
@@ -217,9 +219,13 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
         # Resample the temporal signal to the fs_audio sampling rate
 
         N_audio = np.int(fs_audio/fs_temporal*N_temporal)
-        sig_audio = signal.resample(sig_temporal, N_audio)
-        t_audio = np.linspace(0,N_audio/fs_audio, N_audio)
+        t_temporal = np.linspace(0, N_temporal/fs_temporal,N_temporal)
+        sig_audio = sig_temporal
+        t_audio = t_temporal
 
+        sig_audio, t_audio = signal.resample(sig_temporal, N_audio, t=t_temporal, window='hamming')
+        
+        
         
         # Do not trim
         # Trims the audio signal to the sample_time_span
@@ -227,8 +233,8 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
         
         # sig_frame = sig_audio[0:N_frame]
         sig_frame = sig_audio
+        t_frame = t_audio
     # N_frame = sig_frame.size
-    t_frame = np.linspace(0,sig_frame.size/fs_audio, sig_frame.size)
     
     return (t_frame, sig_frame.real)
 
