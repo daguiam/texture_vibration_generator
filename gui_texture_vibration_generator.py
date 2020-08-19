@@ -7,6 +7,9 @@ import wave
 import pyaudio
 import time
 
+import json
+import os
+
 
 import threading
 import logging
@@ -141,8 +144,16 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
 
-
+# Fill list of textures
 list_of_textures = ['Texture 1', 'Texture 2', 'Texture 3']
+textures_dictionary = dict()
+json_filename = os.path.join("textures", "textures.json")
+with open(json_filename) as json_file:
+    textures_dictionary = json.load(json_file)
+
+list_of_textures = list(textures_dictionary.keys())
+
+
 list_of_output_devices = []
 list_of_output_devices_selected = None
 list_of_output_devices_selected_device_id = None

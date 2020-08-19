@@ -1,0 +1,7 @@
+D	3 
+K	3 
+R3zm	27.3 µm
+Ra	4.37 µm
+RzIso	30 µm
+Sk	-0.212 
+SM	4.17 mm
