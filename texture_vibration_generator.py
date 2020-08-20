@@ -12,6 +12,9 @@ import time
 import win32gui
 import win32api
 
+import math
+def round_up_to_even(f):
+    return math.ceil(f / 2.) * 2
 
 
 class Cursor():
@@ -187,7 +190,7 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
     if velocity_probe ==0 :
         #print("zero velocity")
         sig_frame = np.zeros(N_frame)
-        t_frame = np.linspace(0,sig_frame.size/fs_audio, sig_frame.size)
+        t_frame = np.linspace(0,sig_frame.size/fs_audio, sig_frame.size, endpoint=False)
 
     else:
 
@@ -196,7 +199,7 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
         sig_spatial = generate_audio_from_spectrum(spectrum_texture, N_output=None)
 
         N_spatial = len(sig_spatial)
-        t_spatial = np.linspace(0, N_texture/fs_spatial, N_spatial)
+        t_spatial = np.linspace(0, N_texture/fs_spatial, N_spatial, endpoint=False)
 
 
         # resample the signal to the fs_temporal = fs_spatial*velocity_probe
@@ -219,7 +222,7 @@ def estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audi
         # Resample the temporal signal to the fs_audio sampling rate
 
         N_audio = np.int(fs_audio/fs_temporal*N_temporal)
-        t_temporal = np.linspace(0, N_temporal/fs_temporal,N_temporal)
+        t_temporal = np.linspace(0, N_temporal/fs_temporal,N_temporal, endpoint=False)
         sig_audio = sig_temporal
         t_audio = t_temporal
 
@@ -388,7 +391,7 @@ def create_texture(wavelength_texture, length_texture, N_texture, texture_height
     if not isinstance(wavelength_texture, list) :
         wavelength_texture = [wavelength_texture]
     
-    x = np.linspace(0, length_texture, N_texture, endpoint=True)
+    x = np.linspace(0, length_texture, N_texture, endpoint=False)
     t = x/velocity_probe
     texture = np.zeros(len(x))
     for wavelength in wavelength_texture:

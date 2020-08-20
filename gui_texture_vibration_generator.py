@@ -22,6 +22,16 @@ from texture_vibration_generator import *
 
 
 
+def signal_from_spectrum(spectrum, N_trim=256):
+
+    sig = np.fft.ifft(spectrum)
+    N_trim = np.int(N_trim)
+    N_sig = sig.size
+
+    if N_sig > 2*N_trim:
+
+        sig = sig[N_trim:N_sig-N_trim]
+    return sig
 
 
 
@@ -96,6 +106,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
     N_audio_segment = 1024 # How big is the audio segment size
     N_audio_segment = 512*2
     N_overlap = 256*0
+    # fs_texture = 1000
     # N_audio_segment = N_audio_segment+N_overlap
 
     time_texture_sample_period = N_audio_segment/fs_audio
@@ -123,22 +134,50 @@ def thread_PlayTexture_blocking(output_device_index=None):
             frame = np.copy(buffer.extractleft(N_audio_segment))
             frame = np.copy(buffer.extract(added_size))
 
-        # t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
+        if 0:
+            t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
 
-        t_frame = np.linspace(0, N_audio_segment/fs_audio, N_audio_segment)
-        sig_frame = np.sin(2*np.pi*256*t_frame)
+        # t_frame = np.linspace(0, N_audio_segment/fs_audio, N_audio_segment, endpoint=False)
+        # sig_frame = np.sin(2*np.pi*256*t_frame)
         # print(sig_frame)
+        
+        if 1:
+            fs_texture = fs_spatial
+            N_texture = spectrum_texture.size
+            sig2 = signal_from_spectrum(spectrum_texture, N_trim=np.int(N_texture*3/8))
+            sig2 = signal_from_spectrum(spectrum_texture, N_trim=0)
+            
+            N_sig = sig2.size
+
+            
+            N_sig = np.int(fs_audio/(fs_texture*velocity_probe)*N_texture)
+            N_sig = round_up_to_even(N_sig)
+
+            sig2 = signal.resample(sig2, N_sig)
+            
+            # make a CHUNK of 1024
+            # if N_sig > N_audio_segment:
+            #     print("split")
+            #     sig2 = sig2[:np.int(N_audio_segment/2)]
+            #     sig2 = np.concatenate([sig2, np.flip(sig2)])
+            sig2 = sig2/np.max(sig2)
+
+            sig_frame = sig2.real
+
 
 
         frame = sig_frame
+        frame = frame*output_volume/200
 
-        logging.info("Frame size: %d  frame diff %f ptp %f"%(frame.size, frame[-1]-frame[0], np.ptp(frame)))
-        # print(np.diff(t_frame)[:5])
+        logging.info("Frame size: %d  frame diff %f ptp %f, fsspatial %d Nsig %d, Naudio %d Ntext %d"%(
+            frame.size, frame[-1]-frame[0], np.ptp(frame), fs_spatial, N_sig, N_audio_segment, N_texture))
+        
+        
         
         frames_available = stream.get_write_available()
         output_latency = stream.get_output_latency()
 
-        logging.info("Write available %d, latency %f"%(frames_available,output_latency))
+        # logging.info("Write available %d, latency %f"%(frames_available,output_latency))
 
 
         # logging.info("Buffer size before %d"%(len(buffer)))
@@ -169,8 +208,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
         if np.max(frame.real)>=1:
             print("Overflowed amplitude: %f"%(np.max(frame.real)))
             logging.info("Overflowed amplitude: %f"%(np.max(frame.real)))
-            continue
-        audio = array2audio(frame.real, max_amplitude=1)
+            # continue
+        audio = array2audio(frame.real, max_amplitude=2)
         data = audio
         # data = np.repeat(data,2)
 
@@ -209,7 +248,7 @@ list_of_textures += sorted(textures_dictionary.keys())
 list_of_output_devices = []
 list_of_output_devices_selected = None
 list_of_output_devices_selected_device_id = None
-output_volume = 20
+output_volume = 10
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
@@ -380,6 +419,7 @@ if __name__ == "__main__":
         window["-CANVAS_VELOCITY_PLOT-"].set_tooltip('Velocity plot')
         agg_velocity = draw_figure(window["-CANVAS_VELOCITY_PLOT-"].TKCanvas, figure_velocity)
 
+    selected_texture = list_of_textures[0]
 
     next_frame = 1
     # Initializing Audio
@@ -507,8 +547,8 @@ if __name__ == "__main__":
             
         # Updating the spectrum texture         
         # creating analytical spectrum texture
-        if 1:
-            N_texture = 512*1
+        if selected_texture != values['listbox_texture_input'][0]:
+            N_texture = 512*4
 
             selected_texture = values['listbox_texture_input'][0]
 
@@ -525,7 +565,7 @@ if __name__ == "__main__":
                 
                     
                 # print("Wavelength texture", wavelength_texture,selected_texture)
-                length_texture = 1
+                length_texture = 2
                 x, texture = create_texture(wavelength_texture, length_texture, N_texture)
                 spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
                 
@@ -555,6 +595,8 @@ if __name__ == "__main__":
 
                 texture_file = textures_dictionary[selected_texture]
                 freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
+                fs_spatial = np.int(np.ptp(freqs)+1)
+                # print("fs_spatial",fs_spatial)
                 # spectrum = spectrum/np.max(spectrum)
                 spectrum_texture = spectrum
                 spectrum_texture *= textures_gain
