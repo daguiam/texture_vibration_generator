@@ -1,20 +1,4 @@
 {
     "MT-11020_ABS": "textures\\ABS\\MT-11020\\MT-11020_spectrum.txt",
-    "MT-11030_ABS": "textures\\ABS\\MT-11030\\MT-11030_spectrum.txt",
-    "MT-11040_ABS": "textures\\ABS\\MT-11040\\MT-11040_spectrum.txt",
-    "MT-11050_ABS": "textures\\ABS\\MT-11050\\MT-11050_spectrum.txt",
-    "MT-11100_ABS": "textures\\ABS\\MT-11100\\MT-11100_spectrum.txt",
-    "MT-11110_ABS": "textures\\ABS\\MT-11110\\MT-11110_spectrum.txt",
-    "MT-11120_ABS": "textures\\ABS\\MT-11120\\MT-11120_spectrum.txt",
-    "MT-11150_ABS": "textures\\ABS\\MT-11150\\MT-11150_spectrum.txt",
-    "MT-11160_ABS": "textures\\ABS\\MT-11160\\MT-11160_spectrum.txt",
-    "MT-11020_PP": "textures\\PP\\MT-11020\\MT-11020_spectrum.txt",
-    "MT-11030_PP": "textures\\PP\\MT-11030\\MT-11030_spectrum.txt",
-    "MT-11040_PP": "textures\\PP\\MT-11040\\MT-11040_spectrum.txt",
-    "MT-11050_PP": "textures\\PP\\MT-11050\\MT-11050_spectrum.txt",
-    "MT-11100_PP": "textures\\PP\\MT-11100\\MT-11100_spectrum.txt",
-    "MT-11110_PP": "textures\\PP\\MT-11110\\MT-11110_spectrum.txt",
-    "MT-11120_PP": "textures\\PP\\MT-11120\\MT-11120_spectrum.txt",
-    "MT-11150_PP": "textures\\PP\\MT-11150\\MT-11150_spectrum.txt",
-    "MT-11160_PP": "textures\\PP\\MT-11160\\MT-11160_spectrum.txt"
+    "MT-11020_PP": "textures\\PP\\MT-11020\\MT-11020_spectrum.txt"
 }

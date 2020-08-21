@@ -22,7 +22,7 @@ from texture_vibration_generator import *
 
 
 
-def signal_from_spectrum(spectrum, N_trim=256):
+def signal_from_spectrum(spectrum, N_trim=0):
 
     sig = np.fft.ifft(spectrum)
     N_trim = np.int(N_trim)
