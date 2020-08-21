@@ -73,6 +73,10 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
     lowcut = 50
     highcut = 400
+    
+    N_easing = 1024*2
+    easing_a = 512
+
 
     b,a = butter_lowpass_coefficients(highcut, fs_audio,order=filter_order)
     b,a = butter_bandpass(lowcut, highcut, fs_audio, order=filter_order)
@@ -114,6 +118,10 @@ def thread_PlayTexture_blocking(output_device_index=None):
     prev_time2 = time.time()
 
     data = np.zeros(N_audio_segment)
+    delay = 0
+    buffer_audio = np.array([])
+    output_buffer = np.array([])
+
     while (flag_play_texture):
         # velocity_probe = cursor.speed()/500 +10
         # gets velocity from global variable.
@@ -121,6 +129,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         stream.write(data)
 
+        N_texture = spectrum_texture.size
 
         # velocity_probe += 10
         # velocity_probe = 15
@@ -141,7 +150,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
         # sig_frame = np.sin(2*np.pi*256*t_frame)
         # print(sig_frame)
         
-        if 1:
+        if 0:
             fs_texture = fs_spatial
             N_texture = spectrum_texture.size
             sig2 = signal_from_spectrum(spectrum_texture, N_trim=np.int(N_texture*3/8))
@@ -165,12 +174,39 @@ def thread_PlayTexture_blocking(output_device_index=None):
             sig_frame = sig2.real
 
 
+        if 1:
+            
 
+            # velocity for each frame
+            N_frame = N_audio_segment
+
+            
+            texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
+
+            finger_velocity = velocity_probe*finger_spacing
+            impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
+
+            # easing the impulse signal
+            texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
+
+            texture_frame = texture_frame/np.max(np.abs(texture_frame))
+            calculated_signal = convolve_texture_sample(texture_frame, impulses)
+
+            buffer_audio = add_signal_buffer(buffer_audio, calculated_signal)           
+            output, buffer_audio = extract_signal_buffer(buffer_audio, N_frame)
+            
+            # output_buffer = np.concatenate([output_buffer, output])
+            sig_frame = output
+            
+
+        
         frame = sig_frame
-        frame = frame*output_volume/200
+        frame = frame*output_volume/100
 
-        logging.info("Frame size: %d  frame diff %f ptp %f, fsspatial %d Nsig %d, Naudio %d Ntext %d"%(
-            frame.size, frame[-1]-frame[0], np.ptp(frame), fs_spatial, N_sig, N_audio_segment, N_texture))
+        # print('ptp frame', np.ptp(frame), len(buffer_audio), sig_frame.size)
+
+        # logging.info("Frame size: %d  frame diff %f ptp %f, fsspatial %d  Naudio %d Ntext %d"%(
+        #     frame.size, frame[-1]-frame[0], np.ptp(frame), fs_spatial, N_audio_segment, N_texture))
         
         
         
@@ -232,6 +268,11 @@ def thread_PlayTexture_blocking(output_device_index=None):
     
     logging.info("Thread  : Stopping")
 
+
+
+
+# Finger details
+finger_spacing = 1
 
 
 # Fill list of textures
@@ -335,7 +376,7 @@ if __name__ == "__main__":
         [sg.Text("Sound plot")],
         [ sg.Text("Velocity mm/s", key='text_velocity'),
             sg.Checkbox('Add base velocity', default=True, key='checkbox_base_velocity'),
-            sg.Slider(range=(0, 30), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
+            sg.Slider(range=(0, 60), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
         [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
         [sg.Text("Select output device [Cypress]"),sg.Button("Refresh", key='btn_refresh_devices')],
         [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),
@@ -404,6 +445,8 @@ if __name__ == "__main__":
         buffer_velocity_t = CircularBuffer(maxlen=max_samples_velocity)
 
         velocity_probe = cursor.speed()
+
+
 
         buffer_velocity.extend([velocity_probe])
         buffer_velocity_t.extend([time.time()])
@@ -613,11 +656,11 @@ if __name__ == "__main__":
                 # ax = axes[1]
                 ax.cla()
                 ax.plot(freqs, spectrum)
-                ax.set_xlabel('k [1/mm]')
-                ax.set_ylabel('A [a.u.]')
-                # ax.set_xlim(xmin=0, xmax=40)
-                ax.set_xlim(xmin=0, xmax=100)
-                ax.set_ylim(0,1)
+                # ax.set_xlabel('k [1/mm]')
+                # ax.set_ylabel('A [a.u.]')
+                # # ax.set_xlim(xmin=0, xmax=40)
+                # ax.set_xlim(xmin=0, xmax=100)
+                # ax.set_ylim(0,1)
 
                 agg_texture.draw()
 

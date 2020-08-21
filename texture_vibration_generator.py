@@ -452,6 +452,148 @@ def create_spectrum_texture(wavelength_texture, length_texture, N_texture, veloc
 
     return (spectrum_texture, fs_spatial)
 
+
+
+
+
+
+def easing_impulse_window(a, N):
+    
+    assert isinstance(a, int), "a must be int"
+    
+    x = np.arange(a)
+    
+    A = 0.5-np.cos((x/a)*np.pi)/2
+    
+    b = N-a
+    x = np.arange(b )
+
+    B = 0.5+np.cos((x/(b))*np.pi)/2
+    B = -np.power((x/b),2)+1
+    
+    window = np.concatenate([A,B])
+    return window
+
+def texture_easing_window(texture, easing_a, N_easing):
+    
+#     assert texture.size >= N_easing, "array size must be equal or larger than N_easing"
+    if texture.size <= N_easing:
+        easing_a = np.int(easing_a/N_easing*texture.size)
+        N_easing = texture.size
+    
+    window = easing_impulse_window(easing_a, N_easing)
+    texture = texture[:window.size]*window
+    return texture
+    
+    
+    
+
+def add_signal_buffer(buffer_audio, sig):
+
+    # pad the existing buffer to fit the new data
+    N_signal = sig.size
+    if N_signal > buffer_audio.size:
+        # print("a", buffer_audio.size,N_signal)
+
+        buffer_audio = np.pad(buffer_audio, (0, N_signal-buffer_audio.size))
+    else: 
+        # print( buffer_audio.size,N_signal)
+        sig = np.pad(sig, (0, buffer_audio.size-N_signal))
+        
+        
+    buffer_audio = buffer_audio+sig
+    return buffer_audio
+
+def extract_signal_buffer(buffer_audio, N_frame):
+    
+#     assert buffer_audio.size > N_frame, "not enough samples in buffer_audio?"
+    if buffer_audio.size < N_frame:
+        N_frame = buffer_audio.size
+    output = buffer_audio[:N_frame]
+    buffer_audio = buffer_audio[N_frame:]
+    return output, buffer_audio
+    
+
+
+
+
+
+def resample_texture(texture, k_spatial, fs, velocity, N_useful=None):
+    
+    assert velocity>0, "velocity must be non-zero, otherwise just add zeros"
+    N_texture = texture.size
+    
+    
+#     if velocity < fs/k_spatial:
+    N_resample = np.int(fs/(k_spatial*velocity)*N_texture)
+    
+    if N_useful is not None:
+        # trim texture to useful
+#         print("trimmed texture due to low velocity")
+        N_texture = np.ceil(k_spatial*velocity/fs*N_useful).astype(np.int)
+        texture = texture[:N_texture]
+        N_texture = texture.size
+    N_resample = np.int(fs/(k_spatial*velocity)*N_texture)
+#     print("Ntext", N_texture, "Nresamp", N_resample)
+    
+#     if N_resample > N_texture:
+        
+        
+    texture_resample = signal.resample(texture, N_resample)
+    return texture_resample
+
+
+def convolve_texture_sample(texture_frame, impulses):
+    
+
+    calculated_signal = np.convolve(impulses, texture_frame, mode='full')
+
+    
+    return calculated_signal
+
+
+def generate_impulse_train(velocity, N_frame, fs, delay=0):
+    """
+    Generates an impulse train respective of the velocity, in frame of size N_frame, sampled at fs
+    counting a delay number of samples (float for average finger_velocity) since the last impulse.
+    """
+    n_impulse_velocity_period = (1/velocity)*fs
+
+    idx = np.array([])
+
+    idx = np.arange(-delay, N_frame, n_impulse_velocity_period)
+
+    
+    idx = idx[np.where(idx>=0)]
+
+    if idx.size == 0:
+        delay = delay+N_frame
+        impulse = np.zeros(N_frame)
+    else:
+        delay = N_frame-idx[-1]
+        idx = np.array(idx).astype(np.int)
+#         idx = tuple(idx)
+        
+        impulse = signal.unit_impulse(N_frame, [i for i in idx])
+    
+    return (impulse, delay)    
+    
+    
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
 
     # Streaming audio buffer to output.
