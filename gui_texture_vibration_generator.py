@@ -71,7 +71,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
     # n_phase = 0
     filter_order = 3
 
-    lowcut = 50
+    lowcut = 80
     highcut = 400
     
     N_easing = 1024*2
@@ -227,7 +227,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         # print("Frame max:", np.max(frame.real))
 
-        # frame, zf = signal.lfilter(b, a, frame, zi=zf)
+        frame, zf = signal.lfilter(b, a, frame, zi=zf)
         
         # frame = signal.lfilter(b, a, frame, )
 
