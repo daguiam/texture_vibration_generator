@@ -1,4 +1,4 @@
-import simpleaudio as sa
+# import simpleaudio as sa
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
@@ -35,6 +35,193 @@ def signal_from_spectrum(spectrum, N_trim=0):
 
 
 
+
+def play_texture_callback(in_data, frame_count, time_info, flag):
+
+    global b,a,fulldata #global variables for filter coefficients and array
+    # audio_data = np.fromstring(in_data, dtype=np.float32)
+    # #do whatever with data, in my case I want to hear my data filtered in realtime
+    # audio_data = signal.filtfilt(b,a,audio_data,padlen=200).astype(np.float32).tostring()
+    # fulldata = np.append(fulldata,audio_data) #saves filtered data in an array
+    
+    
+    return (audio_data, pyaudio.paContinue)
+
+
+def thread_PlayTexture_callback(output_device_index=None):
+
+    global window
+    global velocity_probe
+
+    global flag_play_texture
+    global spectrum_texture
+    global lowcut, highcut
+
+    # Streaming audio buffer to output.
+    logging.info("Thread  : Starting play texture callback")
+
+    # N_audio_segment = 512# How big is the audio segment size
+    # N_overlap = 128
+    # N_CHUNK = N_audio_segment
+    
+    fs_audio = 8192
+    
+    frame_list = []
+    #Initialize
+    sig = generate_audio_from_spectrum(spectrum_texture)
+    sig = np.zeros(sig.size)
+    # sig = np.zeros(N_CHUNK)
+    # frequency = 0
+    # n_phase = 0
+    filter_order = 3
+
+    N_easing = 1024*2
+    easing_a = 512
+
+    b,a = butter_lowpass_coefficients(highcut, fs_audio,order=filter_order)
+    b,a = butter_bandpass(lowcut, highcut, fs_audio, order=filter_order)
+    # b,a = butter_bandpass(2, 400, fs_audio, order=filter_order)
+
+    zf = signal.lfiltic(b,a, sig)
+    
+    # print("zf",zf)
+
+    p = pyaudio.PyAudio()
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = fs_audio
+    # CHUNK = spectrum_texture.size
+
+    buffer = CircularBuffer(maxlen=10*fs_audio)
+    # buffer = CircularBuffer(maxlen=2048)
+
+
+
+
+    N_audio_segment = 1024 # How big is the audio segment size
+    N_audio_segment = 512*2
+    
+    
+    # Opening the stream
+    stream = p.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    output=True,
+                    frames_per_buffer = N_audio_segment,
+                    output_device_index=output_device_index,
+                    )#stream_callback=play_texture_callback)
+
+
+    # fs_texture = 1000
+    # N_audio_segment = N_audio_segment+N_overlap
+
+    time_texture_sample_period = N_audio_segment/fs_audio
+    prev_time = time.time()
+    prev_time2 = time.time()
+
+    data = np.zeros(N_audio_segment)
+    delay = 0
+    buffer_audio = np.array([])
+    output_buffer = np.array([])
+
+    output_latency = stream.get_output_latency()
+    logging.info("Thread  : Output Latency %0.3fs"%(output_latency))
+
+    while (flag_play_texture):
+        # velocity_probe = cursor.speed()/500 +10
+        # gets velocity from global variable.
+        # starts new data
+
+        stream.write(data, data.size)
+
+        N_texture = spectrum_texture.size
+
+
+        if 1:
+            
+
+            # velocity for each frame
+            N_frame = N_audio_segment
+
+            if velocity_probe == 0:
+                calculated_signal = np.zeros(N_frame)
+            else:
+                texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
+
+                finger_velocity = velocity_probe*finger_spacing
+                impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
+
+                # easing the impulse signal
+                texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
+
+                texture_frame = texture_frame/np.max(np.abs(texture_frame))
+                calculated_signal = convolve_texture_sample(texture_frame, impulses)
+
+            buffer_audio = add_signal_buffer(buffer_audio, calculated_signal)           
+            output, buffer_audio = extract_signal_buffer(buffer_audio, N_frame)
+            
+            # output_buffer = np.concatenate([output_buffer, output])
+            sig_frame = output
+            
+
+        
+        frame = sig_frame
+        frame = frame*output_volume/100
+
+        # print('ptp frame', np.ptp(frame), len(buffer_audio), sig_frame.size)
+
+        # logging.info("Frame size: %d  frame diff %f ptp %f, fsspatial %d  Naudio %d Ntext %d"%(
+        #     frame.size, frame[-1]-frame[0], np.ptp(frame), fs_spatial, N_audio_segment, N_texture))
+        
+        
+        
+        frames_available = stream.get_write_available()
+        output_latency = stream.get_output_latency()
+
+        # logging.info("Write available %d, latency %f"%(frames_available,output_latency))
+
+
+        # logging.info("Buffer size before %d"%(len(buffer)))
+        # frame = np.copy(buffer.extractleft(frames_available))
+
+       
+
+        frame, zf = signal.lfilter(b, a, frame, zi=zf)
+        
+        # print("frame amplitude: %f std %f frame start %f end %f"%(np.ptp(frame.real), np.std(frame.real), frame.real[0], frame.real[-1]))
+
+
+
+        if np.max(frame.real)>=1:
+            print("Overflowed amplitude: %f"%(np.max(frame.real)))
+            logging.info("Overflowed amplitude: %f"%(np.max(frame.real)))
+            # continue
+        audio = array2audio(frame.real, max_amplitude=2)
+        data = audio
+        # data = np.repeat(data,2)
+
+
+        # stream.write(data)
+        curr_time = time.time()
+        logging.info("Time delta %0.4f %0.4f and %0.4f s %f Write available %d"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe,stream.get_write_available()))
+
+        # logging.info("Write available %d"%(stream.get_write_available()))
+        
+        prev_time2 = prev_time
+        prev_time = curr_time
+
+
+
+    stream.stop_stream()
+    stream.close()
+
+    p.terminate()
+    
+    logging.info("Thread  : Stopping")
+
+
+
+
 def thread_PlayTexture_blocking(output_device_index=None):
 
     global window
@@ -43,8 +230,9 @@ def thread_PlayTexture_blocking(output_device_index=None):
     global flag_play_texture
     global spectrum_texture
     
+    global lowcut, highcut
     # Streaming audio buffer to output.
-    logging.info("Thread  : Starting")
+    logging.info("Thread  : Starting play texture blocking")
 
     # N_audio_segment = 512# How big is the audio segment size
     # N_overlap = 128
@@ -71,9 +259,6 @@ def thread_PlayTexture_blocking(output_device_index=None):
     # n_phase = 0
     filter_order = 3
 
-    lowcut = 100
-    highcut = 800
-    
     N_easing = 1024*2
     easing_a = 512
 
@@ -96,20 +281,20 @@ def thread_PlayTexture_blocking(output_device_index=None):
     # buffer = CircularBuffer(maxlen=2048)
 
 
+
+    N_audio_segment = 1024 # How big is the audio segment size
+    N_audio_segment = 512*2
+    N_overlap = 256*0
     # Opening the stream
     stream = p.open(format=FORMAT,
                     channels=CHANNELS,
                     rate=RATE,
                     output=True,
-                    frames_per_buffer = 2048*2,
+                    frames_per_buffer = N_audio_segment,
                     output_device_index=output_device_index,)
 
 
 
-
-    N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 512*2
-    N_overlap = 256*0
     # fs_texture = 1000
     # N_audio_segment = N_audio_segment+N_overlap
 
@@ -122,12 +307,15 @@ def thread_PlayTexture_blocking(output_device_index=None):
     buffer_audio = np.array([])
     output_buffer = np.array([])
 
+    output_latency = stream.get_output_latency()
+    logging.info("Thread  : Output Latency %0.3fs"%(output_latency))
+
     while (flag_play_texture):
         # velocity_probe = cursor.speed()/500 +10
         # gets velocity from global variable.
         # starts new data
 
-        stream.write(data)
+        stream.write(data, data.size)
 
         N_texture = spectrum_texture.size
 
@@ -180,17 +368,19 @@ def thread_PlayTexture_blocking(output_device_index=None):
             # velocity for each frame
             N_frame = N_audio_segment
 
-            
-            texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
+            if velocity_probe == 0:
+                calculated_signal = np.zeros(N_frame)
+            else:
+                texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
 
-            finger_velocity = velocity_probe*finger_spacing
-            impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
+                finger_velocity = velocity_probe*finger_spacing
+                impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
 
-            # easing the impulse signal
-            texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
+                # easing the impulse signal
+                texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
 
-            texture_frame = texture_frame/np.max(np.abs(texture_frame))
-            calculated_signal = convolve_texture_sample(texture_frame, impulses)
+                texture_frame = texture_frame/np.max(np.abs(texture_frame))
+                calculated_signal = convolve_texture_sample(texture_frame, impulses)
 
             buffer_audio = add_signal_buffer(buffer_audio, calculated_signal)           
             output, buffer_audio = extract_signal_buffer(buffer_audio, N_frame)
@@ -220,28 +410,12 @@ def thread_PlayTexture_blocking(output_device_index=None):
         # frame = np.copy(buffer.extractleft(frames_available))
 
        
-        # zf = None
-        # logging.info("Buffer size %d"%(len(buffer)))
-        # print("ptp", np.ptp(frame))
-        # print("ptp", np.ptp(frame), np.mean(frame))
-
-        # print("Frame max:", np.max(frame.real))
 
         frame, zf = signal.lfilter(b, a, frame, zi=zf)
         
-        print("frame amplitude: %f std %f frame start %f end %f"%(np.ptp(frame.real), np.std(frame.real), frame.real[0], frame.real[-1]))
+        # print("frame amplitude: %f std %f frame start %f end %f"%(np.ptp(frame.real), np.std(frame.real), frame.real[0], frame.real[-1]))
 
-        # frame = signal.lfilter(b, a, frame, )
 
-        # print("ptpfilt", np.ptp(frame), np.mean(frame))
-
-        # frame *= np.hamming(frame.size)
-
-        # frame = frame*output_volume/100
-        # frame = frame/np.max(frame)*output_volume/100
-        
-        # assert np.max(frame.real)<=1, "Frame overflowed amplitude=1"
-        # print("Frame max:", np.max(frame.real))
 
         if np.max(frame.real)>=1:
             print("Overflowed amplitude: %f"%(np.max(frame.real)))
@@ -254,7 +428,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         # stream.write(data)
         curr_time = time.time()
-        # logging.debug("Time delta %0.4f %0.4f and %0.4f s %f"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe))
+        logging.info("Time delta %0.4f %0.4f and %0.4f s %f Write available %d"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe,stream.get_write_available()))
 
         # logging.info("Write available %d"%(stream.get_write_available()))
         
@@ -273,9 +447,19 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
 
+
+
+
+
+
+
 # Finger details
 finger_spacing = 1
 
+# frequency response
+lowcut = 100
+highcut = 800
+    
 
 # Fill list of textures
 list_of_textures = ['Texture 1', 'Texture 2', 'Texture 3']
@@ -563,6 +747,7 @@ if __name__ == "__main__":
                             break
                         
             x = threading.Thread(target=thread_PlayTexture_blocking, args=([device_index]), daemon=True)
+            # x = threading.Thread(target=thread_PlayTexture_callback, args=([device_index]), daemon=True)
             threads_texture.append(x)
             
             x.start()
