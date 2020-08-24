@@ -139,3 +139,4 @@ cython_debug/
 
 *.png 
 *.ua2
+__pycache__

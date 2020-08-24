@@ -18,6 +18,13 @@ import win32gui
 import win32api
 
 
+def isFloat(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
 from texture_vibration_generator import *
 
 
@@ -32,194 +39,6 @@ def signal_from_spectrum(spectrum, N_trim=0):
 
         sig = sig[N_trim:N_sig-N_trim]
     return sig
-
-
-
-
-def play_texture_callback(in_data, frame_count, time_info, flag):
-
-    global b,a,fulldata #global variables for filter coefficients and array
-    # audio_data = np.fromstring(in_data, dtype=np.float32)
-    # #do whatever with data, in my case I want to hear my data filtered in realtime
-    # audio_data = signal.filtfilt(b,a,audio_data,padlen=200).astype(np.float32).tostring()
-    # fulldata = np.append(fulldata,audio_data) #saves filtered data in an array
-    
-    
-    return (audio_data, pyaudio.paContinue)
-
-
-def thread_PlayTexture_callback(output_device_index=None):
-
-    global window
-    global velocity_probe
-
-    global flag_play_texture
-    global spectrum_texture
-    global lowcut, highcut
-
-    # Streaming audio buffer to output.
-    logging.info("Thread  : Starting play texture callback")
-
-    # N_audio_segment = 512# How big is the audio segment size
-    # N_overlap = 128
-    # N_CHUNK = N_audio_segment
-    
-    fs_audio = 8192
-    
-    frame_list = []
-    #Initialize
-    sig = generate_audio_from_spectrum(spectrum_texture)
-    sig = np.zeros(sig.size)
-    # sig = np.zeros(N_CHUNK)
-    # frequency = 0
-    # n_phase = 0
-    filter_order = 3
-
-    N_easing = 1024*2
-    easing_a = 512
-
-    b,a = butter_lowpass_coefficients(highcut, fs_audio,order=filter_order)
-    b,a = butter_bandpass(lowcut, highcut, fs_audio, order=filter_order)
-    # b,a = butter_bandpass(2, 400, fs_audio, order=filter_order)
-
-    zf = signal.lfiltic(b,a, sig)
-    
-    # print("zf",zf)
-
-    p = pyaudio.PyAudio()
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = fs_audio
-    # CHUNK = spectrum_texture.size
-
-    buffer = CircularBuffer(maxlen=10*fs_audio)
-    # buffer = CircularBuffer(maxlen=2048)
-
-
-
-
-    N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 512*2
-    
-    
-    # Opening the stream
-    stream = p.open(format=FORMAT,
-                    channels=CHANNELS,
-                    rate=RATE,
-                    output=True,
-                    frames_per_buffer = N_audio_segment,
-                    output_device_index=output_device_index,
-                    )#stream_callback=play_texture_callback)
-
-
-    # fs_texture = 1000
-    # N_audio_segment = N_audio_segment+N_overlap
-
-    time_texture_sample_period = N_audio_segment/fs_audio
-    prev_time = time.time()
-    prev_time2 = time.time()
-
-    data = np.zeros(N_audio_segment)
-    delay = 0
-    buffer_audio = np.array([])
-    output_buffer = np.array([])
-
-    output_latency = stream.get_output_latency()
-    logging.info("Thread  : Output Latency %0.3fs"%(output_latency))
-
-    while (flag_play_texture):
-        # velocity_probe = cursor.speed()/500 +10
-        # gets velocity from global variable.
-        # starts new data
-
-        stream.write(data, data.size)
-
-        N_texture = spectrum_texture.size
-
-
-        if 1:
-            
-
-            # velocity for each frame
-            N_frame = N_audio_segment
-
-            if velocity_probe == 0:
-                calculated_signal = np.zeros(N_frame)
-            else:
-                texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
-
-                finger_velocity = velocity_probe*finger_spacing
-                impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
-
-                # easing the impulse signal
-                texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
-
-                texture_frame = texture_frame/np.max(np.abs(texture_frame))
-                calculated_signal = convolve_texture_sample(texture_frame, impulses)
-
-            buffer_audio = add_signal_buffer(buffer_audio, calculated_signal)           
-            output, buffer_audio = extract_signal_buffer(buffer_audio, N_frame)
-            
-            # output_buffer = np.concatenate([output_buffer, output])
-            sig_frame = output
-            
-
-        
-        frame = sig_frame
-        frame = frame*output_volume/100
-
-        # print('ptp frame', np.ptp(frame), len(buffer_audio), sig_frame.size)
-
-        # logging.info("Frame size: %d  frame diff %f ptp %f, fsspatial %d  Naudio %d Ntext %d"%(
-        #     frame.size, frame[-1]-frame[0], np.ptp(frame), fs_spatial, N_audio_segment, N_texture))
-        
-        
-        
-        frames_available = stream.get_write_available()
-        output_latency = stream.get_output_latency()
-
-        # logging.info("Write available %d, latency %f"%(frames_available,output_latency))
-
-
-        # logging.info("Buffer size before %d"%(len(buffer)))
-        # frame = np.copy(buffer.extractleft(frames_available))
-
-       
-
-        frame, zf = signal.lfilter(b, a, frame, zi=zf)
-        
-        # print("frame amplitude: %f std %f frame start %f end %f"%(np.ptp(frame.real), np.std(frame.real), frame.real[0], frame.real[-1]))
-
-
-
-        if np.max(frame.real)>=1:
-            print("Overflowed amplitude: %f"%(np.max(frame.real)))
-            logging.info("Overflowed amplitude: %f"%(np.max(frame.real)))
-            # continue
-        audio = array2audio(frame.real, max_amplitude=2)
-        data = audio
-        # data = np.repeat(data,2)
-
-
-        # stream.write(data)
-        curr_time = time.time()
-        logging.info("Time delta %0.4f %0.4f and %0.4f s %f Write available %d"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe,stream.get_write_available()))
-
-        # logging.info("Write available %d"%(stream.get_write_available()))
-        
-        prev_time2 = prev_time
-        prev_time = curr_time
-
-
-
-    stream.stop_stream()
-    stream.close()
-
-    p.terminate()
-    
-    logging.info("Thread  : Stopping")
-
-
 
 
 def thread_PlayTexture_blocking(output_device_index=None):
@@ -252,8 +71,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
     frame_list = []
     #Initialize
-    sig = generate_audio_from_spectrum(spectrum_texture)
-    sig = np.zeros(sig.size)
+
+    sig = np.zeros(fs_audio)
     # sig = np.zeros(N_CHUNK)
     # frequency = 0
     # n_phase = 0
@@ -283,7 +102,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
     N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 512*2
+    N_audio_segment = 256*1
     N_overlap = 256*0
     # Opening the stream
     stream = p.open(format=FORMAT,
@@ -322,45 +141,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
         # velocity_probe += 10
         # velocity_probe = 15
         
-        # removed circular buffer.. calculates new texture frame every time.
-        if 0:
-            added_size = append_buffer_texture_signal(buffer, spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, N_overlap )
-            logging.info("Size of buffer: %d, added %d"%(len(buffer),added_size))
-
-
-            frame = np.copy(buffer.extractleft(N_audio_segment))
-            frame = np.copy(buffer.extract(added_size))
-
-        if 0:
-            t_frame, sig_frame = estimate_texture_signal(spectrum_texture, fs_spatial, velocity_probe, N_audio_segment, fs_audio, )
-
-        # t_frame = np.linspace(0, N_audio_segment/fs_audio, N_audio_segment, endpoint=False)
-        # sig_frame = np.sin(2*np.pi*256*t_frame)
-        # print(sig_frame)
         
-        if 0:
-            fs_texture = fs_spatial
-            N_texture = spectrum_texture.size
-            sig2 = signal_from_spectrum(spectrum_texture, N_trim=np.int(N_texture*3/8))
-            sig2 = signal_from_spectrum(spectrum_texture, N_trim=0)
-            
-            N_sig = sig2.size
-
-            
-            N_sig = np.int(fs_audio/(fs_texture*velocity_probe)*N_texture)
-            N_sig = round_up_to_even(N_sig)
-
-            sig2 = signal.resample(sig2, N_sig)
-            
-            # make a CHUNK of 1024
-            # if N_sig > N_audio_segment:
-            #     print("split")
-            #     sig2 = sig2[:np.int(N_audio_segment/2)]
-            #     sig2 = np.concatenate([sig2, np.flip(sig2)])
-            sig2 = sig2/np.max(sig2)
-
-            sig_frame = sig2.real
-
 
         if 1:
             
@@ -379,7 +160,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
                 # easing the impulse signal
                 texture_frame = texture_easing_window(texture_frame, easing_a, N_easing)
 
-                texture_frame = texture_frame/np.max(np.abs(texture_frame))
+                # texture_frame = texture_frame/np.max(np.abs(texture_frame))
                 calculated_signal = convolve_texture_sample(texture_frame, impulses)
 
             buffer_audio = add_signal_buffer(buffer_audio, calculated_signal)           
@@ -428,7 +209,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         # stream.write(data)
         curr_time = time.time()
-        logging.info("Time delta %0.4f %0.4f and %0.4f s %f Write available %d"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe,stream.get_write_available()))
+        logging.debug("Time delta %3.4f %3.4f and %3.4f s %3.4f Write available %d ptp %3.4f"%(curr_time-prev_time,curr_time-prev_time2, N_audio_segment/fs_audio, velocity_probe,stream.get_write_available(), np.ptp(frame.real)))
 
         # logging.info("Write available %d"%(stream.get_write_available()))
         
@@ -457,8 +238,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 finger_spacing = 1
 
 # frequency response
-lowcut = 100
-highcut = 800
+lowcut = 15
+highcut = 600
     
 
 # Fill list of textures
@@ -469,7 +250,7 @@ json_filename = os.path.join("textures", "textures.json")
 with open(json_filename) as json_file:
     textures_dictionary = json.load(json_file)
 
-textures_gain = 1/100
+textures_gain = 0.4
 list_of_textures += sorted(textures_dictionary.keys())
 selected_texture = list_of_textures[0]
 
@@ -477,7 +258,7 @@ selected_texture = list_of_textures[0]
 list_of_output_devices = []
 list_of_output_devices_selected = None
 list_of_output_devices_selected_device_id = None
-output_volume = 10
+output_volume = 80
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
@@ -556,10 +337,11 @@ if __name__ == "__main__":
     column1 = [
         [sg.Text("Surface texture and spectrum")],
         [sg.Listbox(values=list_of_textures, default_values=selected_texture, size=(30, 6), key='listbox_texture_input'),],
+        [sg.Text("Textures gain: "),sg.Input(textures_gain, key='input_textures_gain',size=(10,1), enable_events=True),
+         sg.Button("Set", key='btn_set_textures_gain'), sg.Text("", key='warning_textures_gain_overflow')],
         [sg.Canvas(key="-CANVAS_TEXTURE_PLOT-", size=(320, 240)) ],
         
     ]
-
     column2 = [
         [sg.Text("Sound plot")],
         [ sg.Text("Velocity mm/s", key='text_velocity'),
@@ -572,6 +354,10 @@ if __name__ == "__main__":
               [[sg.Text('Volume')],
             [sg.Slider(range=(0, 100), orientation='v', size=(6, 10), default_value=output_volume, tick_interval=20, key='slider_output_volume')],
             ]), ],
+        [sg.Text("Audio filter")],
+        [sg.Text("Low: "),sg.Input(lowcut, key='input_filter_lowcutoff',size=(5,1), enable_events=True),sg.Text("Hz"),
+            sg.Text("High: "),sg.Input(highcut, key='input_filter_highcutoff',size=(5,1), enable_events=True),sg.Text("Hz"),
+             sg.Button("Set", key='btn_set_filter') ],
         [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
     ]
 
@@ -582,14 +368,18 @@ if __name__ == "__main__":
         # [sg.OK(), sg.Cancel()]
     ]
 
+
+    # icon_base64 = 
     # Create the form and show it without the plot
-    title_window = "Texture generator"
+    title_window = "Vibrotactile virtual texture generator"
     window = sg.Window(
         title_window,
         layout,
         location=(0, 0),
         finalize=True,
         element_justification="center",
+        icon = sg.DEFAULT_BASE64_ICON,
+
     )
 
     # Add the plot to the window
@@ -678,9 +468,51 @@ if __name__ == "__main__":
 
 
         velocity_probe = cursor.speed()/200 + base_velocity
-        window['text_velocity'].update("V=%0.1fmm/s"%(velocity_probe))
+        window['text_velocity'].update("V=%03.1fmm/s"%(velocity_probe))
 
         output_volume = values['slider_output_volume']
+
+        # if values['input_filter_lowcutoff'].isnumeric():
+        #     lowcut = np.float(values['input_filter_lowcutoff'])
+        # if values['input_filter_highcutoff'].isnumeric():
+        #     highcut = np.float(values['input_filter_highcutoff'])
+        # if values['input_textures_gain'].isnumeric():
+        #     textures_gain = np.float(values['input_textures_gain'])
+        
+        # print(event, "tex gain", values['input_textures_gain'])
+
+# btn_set_filter
+# btn_set_textures_gain
+        if event == 'btn_set_filter':
+
+            # if values['input_filter_lowcutoff'].isnumeric():
+            if isFloat(values['input_filter_lowcutoff']):
+                lowcut = np.float(values['input_filter_lowcutoff'])
+            window['input_filter_lowcutoff'].update(np.int(lowcut))
+
+            if isFloat(values['input_filter_highcutoff']):
+                highcut = np.float(values['input_filter_highcutoff'])
+            window['input_filter_highcutoff'].update(np.int(highcut))
+
+        if event == 'btn_set_textures_gain':
+            if isFloat(values['input_textures_gain']):
+                textures_gain = np.float(values['input_textures_gain'])
+            window['input_textures_gain'].update(textures_gain)
+        
+            
+        # if event == key and values[key].isnumeric() and values[key][-1] not in ('0123456789.-'):
+        #     window[key].update(values[key][:-1])
+        #     lowcut = np.float(values[key])
+        # key = 'input_filter_highcutoff'
+        # if event == key and values[key.isnumeric()] and values[key][-1] not in ('0123456789.-'):
+        #     window[key].update(values[key][:-1])
+        #     highcut = np.float(values[key])
+        # key = 'input_textures_gain'
+        # if event == key and values[key].isnumeric() and values[key][-1] not in ('0123456789.-'):
+        #     window[key].update(values[key][:-1])
+        #     textures_gain = np.float(values[key])
+        #     print("atex gain", values['input_textures_gain'])
+
 
         if values['checkbox_base_velocity']:
             base_velocity = values['slider_base_velocity']
@@ -788,84 +620,43 @@ if __name__ == "__main__":
             
         # Updating the spectrum texture         
         # creating analytical spectrum texture
-        if selected_texture != values['listbox_texture_input'][0]:
+        if selected_texture != values['listbox_texture_input'][0] or event=='btn_set_textures_gain':
             N_texture = 512*4
 
             selected_texture = values['listbox_texture_input'][0]
 
-            if selected_texture.lower() in ["texture 1", "texture 2", "texture 3"]:
-                if selected_texture.lower() in ["texture 1"]:
+            texture_file = textures_dictionary[selected_texture]
+            freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
+            fs_spatial = np.int(np.ptp(freqs)+1)
+            # print("fs_spatial",fs_spatial)
+            # spectrum = spectrum/np.max(spectrum)
+            spectrum_texture = spectrum
+            spectrum_texture *= textures_gain
+            # spectrum_texture *= output_volume
 
-                    wavelength_texture = 1/10 # [mm]
-                elif selected_texture.lower() in ["texture 2"]:
-                    wavelength_texture = 1/20 # [mm]
-                    wavelength_texture = [1/20, 1/20]
+            
 
-                else:
-                    wavelength_texture = 1/30 # [mm]
-                
-                    
-                # print("Wavelength texture", wavelength_texture,selected_texture)
-                length_texture = 2
-                x, texture = create_texture(wavelength_texture, length_texture, N_texture)
-                spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
-                
-                spectrum_texture = np.abs(spectrum_texture)
-                spectrum_texture /= np.max( np.abs(spectrum_texture))
-                # spectrum_texture *= output_volume
-
-                axes = figure_texture.axes
-                ax = axes[0]
-                # ax = axes[0]
-                # ax.cla()
-                # ax.plot(x,texture)
-                # ax.set_xlabel('x [mm]')
-                # ax.set_ylabel('y [mm]')
-                
-                # ax = axes[1]
-                
-                ax.cla()
-                ax.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture), d=1/fs_spatial)),np.abs(spectrum_texture))
-                ax.set_xlabel('k [1/mm]')
-                ax.set_ylabel('A [a.u.]')
-
-                ax.set_xlim(xmin=0)
-                # plt.subplots_adjust(hspace=0.4, left=0.15)
-                agg_texture.draw()
-            else:
-
-                texture_file = textures_dictionary[selected_texture]
-                freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
-                fs_spatial = np.int(np.ptp(freqs)+1)
-                # print("fs_spatial",fs_spatial)
-                # spectrum = spectrum/np.max(spectrum)
-                spectrum_texture = spectrum
-                spectrum_texture *= textures_gain
-                # spectrum_texture *= output_volume
-
-                
-
-                axes = figure_texture.axes
-                # clar first axis
-                ax = axes[0]
-                ax.cla()
+            axes = figure_texture.axes
+            # clar first axis
+            ax = axes[0]
+            ax.cla()
 
 
-                # ax = axes[1]
-                ax.cla()
-                ax.plot(freqs, spectrum)
-                # ax.set_xlabel('k [1/mm]')
-                # ax.set_ylabel('A [a.u.]')
-                # # ax.set_xlim(xmin=0, xmax=40)
-                # ax.set_xlim(xmin=0, xmax=100)
-                # ax.set_ylim(0,1)
+            # ax = axes[1]
+            ax.cla()
+            ax.plot(freqs, spectrum)
+            # ax.set_xlabel('k [1/mm]')
+            # ax.set_ylabel('A [a.u.]')
+            # # ax.set_xlim(xmin=0, xmax=40)
+            # ax.set_xlim(xmin=0, xmax=100)
+            # ax.set_ylim(0,1)
 
-                ax.set_xlabel('k [1/mm]')
-                ax.set_ylabel('A [a.u.]')
+            ax.set_xlabel('k [1/mm]')
+            ax.set_ylabel('A [a.u.]')
 
-                ax.set_xlim(xmin=0)
+            ax.set_xlim(xmin=0)
 
-                agg_texture.draw()
+            agg_texture.draw()
 
 
     window.close()
