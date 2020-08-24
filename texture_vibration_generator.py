@@ -520,7 +520,12 @@ def extract_signal_buffer(buffer_audio, N_frame):
 
 def resample_texture(texture, k_spatial, fs, velocity, N_useful=None):
     
-    assert velocity>0, "velocity must be non-zero, otherwise just add zeros"
+    # assert velocity>0, "velocity must be non-zero, otherwise just add zeros"
+
+    if velocity == 0:
+        # return a zero-ed texture as result
+        return np.ones(texture.size)
+        
     N_texture = texture.size
     
     

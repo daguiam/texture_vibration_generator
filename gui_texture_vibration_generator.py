@@ -71,8 +71,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
     # n_phase = 0
     filter_order = 3
 
-    lowcut = 80
-    highcut = 400
+    lowcut = 100
+    highcut = 800
     
     N_easing = 1024*2
     easing_a = 512
@@ -229,6 +229,8 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
         frame, zf = signal.lfilter(b, a, frame, zi=zf)
         
+        print("frame amplitude: %f std %f frame start %f end %f"%(np.ptp(frame.real), np.std(frame.real), frame.real[0], frame.real[-1]))
+
         # frame = signal.lfilter(b, a, frame, )
 
         # print("ptpfilt", np.ptp(frame), np.mean(frame))
@@ -277,6 +279,7 @@ finger_spacing = 1
 
 # Fill list of textures
 list_of_textures = ['Texture 1', 'Texture 2', 'Texture 3']
+list_of_textures = [] # synthetic textures removed
 textures_dictionary = dict()
 json_filename = os.path.join("textures", "textures.json")
 with open(json_filename) as json_file:
@@ -284,6 +287,7 @@ with open(json_filename) as json_file:
 
 textures_gain = 1/100
 list_of_textures += sorted(textures_dictionary.keys())
+selected_texture = list_of_textures[0]
 
 
 list_of_output_devices = []
@@ -367,7 +371,7 @@ if __name__ == "__main__":
 
     column1 = [
         [sg.Text("Surface texture and spectrum")],
-        [sg.Listbox(values=list_of_textures, default_values=list_of_textures[0], size=(30, 6), key='listbox_texture_input'),],
+        [sg.Listbox(values=list_of_textures, default_values=selected_texture, size=(30, 6), key='listbox_texture_input'),],
         [sg.Canvas(key="-CANVAS_TEXTURE_PLOT-", size=(320, 240)) ],
         
     ]
@@ -414,12 +418,20 @@ if __name__ == "__main__":
     # Initializing spectrum texture
         # creating analytical spectrum texture
     if 1:
-        N_texture = 512*1
-        wavelength_texture = 1/10 # [mm]
-        length_texture = 1
-        x, texture = create_texture(wavelength_texture, length_texture, N_texture)
-        spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
+        # N_texture = 512*1
+        # wavelength_texture = 1/10 # [mm]
+        # length_texture = 1
+        # x, texture = create_texture(wavelength_texture, length_texture, N_texture)
+        # spectrum_texture, fs_spatial = create_spectrum_texture(wavelength_texture, length_texture, N_texture, )
         
+        texture_file = textures_dictionary[selected_texture]
+        freqs, spectrum = np.loadtxt(texture_file, delimiter=',', unpack=True)
+        fs_spatial = np.int(np.ptp(freqs)+1)
+        # print("fs_spatial",fs_spatial)
+        # spectrum = spectrum/np.max(spectrum)
+        spectrum_texture = spectrum
+        spectrum_texture *= textures_gain
+
         figure_texture,ax = plt.subplots(1,1, figsize=(4,2))
         # plt.sca(ax[0])
         # plt.plot(x,texture)
@@ -427,12 +439,14 @@ if __name__ == "__main__":
         # plt.ylabel('y [mm]')
         
         # plt.sca(ax[1])
-        plt.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
+        # plt.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
+        plt.plot(freqs, spectrum)
+
         plt.xlabel('k [1/mm]')
         plt.ylabel('A [a.u.]')
 
         plt.xlim(xmin=0)
-        plt.subplots_adjust(hspace=0.4, left=0.15, bottom=0.25)
+        plt.subplots_adjust(hspace=0.4, left=0.20, bottom=0.25)
 
         window["-CANVAS_TEXTURE_PLOT-"].set_tooltip('Texture spectrum')
         agg_texture = draw_figure(window["-CANVAS_TEXTURE_PLOT-"].TKCanvas, figure_texture)
@@ -462,7 +476,6 @@ if __name__ == "__main__":
         window["-CANVAS_VELOCITY_PLOT-"].set_tooltip('Velocity plot')
         agg_velocity = draw_figure(window["-CANVAS_VELOCITY_PLOT-"].TKCanvas, figure_velocity)
 
-    selected_texture = list_of_textures[0]
 
     next_frame = 1
     # Initializing Audio
@@ -661,6 +674,11 @@ if __name__ == "__main__":
                 # # ax.set_xlim(xmin=0, xmax=40)
                 # ax.set_xlim(xmin=0, xmax=100)
                 # ax.set_ylim(0,1)
+
+                ax.set_xlabel('k [1/mm]')
+                ax.set_ylabel('A [a.u.]')
+
+                ax.set_xlim(xmin=0)
 
                 agg_texture.draw()
 
