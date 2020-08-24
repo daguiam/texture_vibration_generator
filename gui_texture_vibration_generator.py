@@ -81,6 +81,10 @@ def thread_PlayTexture_blocking(output_device_index=None):
     N_easing = 1024*2
     easing_a = 512
 
+    N_easing = 512*2
+    easing_a = 128
+
+
 
     b,a = butter_lowpass_coefficients(highcut, fs_audio,order=filter_order)
     b,a = butter_bandpass(lowcut, highcut, fs_audio, order=filter_order)
@@ -102,7 +106,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 
 
     N_audio_segment = 1024 # How big is the audio segment size
-    N_audio_segment = 256*1
+    N_audio_segment = 128
     N_overlap = 256*0
     # Opening the stream
     stream = p.open(format=FORMAT,
@@ -238,7 +242,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
 finger_spacing = 1
 
 # frequency response
-lowcut = 15
+lowcut = 50
 highcut = 600
     
 
