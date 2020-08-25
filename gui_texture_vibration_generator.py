@@ -164,6 +164,17 @@ def thread_PlayTexture_blocking(output_device_index=None):
             else:
                 texture_frame = resample_texture(spectrum_texture, fs_spatial, fs_audio, velocity_probe, N_useful=N_easing)
 
+                if 1:
+                    transient_x = np.linspace(0,len(texture_frame)/fs_audio, len(texture_frame))
+                    texture_frame = texture_frame*1e-6
+                    # print(len(transient_x),len(texture_frame))
+                    d_texture = np.gradient(texture_frame, transient_x)
+                    d2_texture = np.gradient(d_texture, transient_x)
+                    # d2_texture = d2_texture/np.max(d2_texture)
+                    logging.info("Size of d2 %f"%(np.ptp(d2_texture)))
+
+                    texture_frame = d2_texture
+
                 finger_velocity = velocity_probe*finger_spacing
                 impulses, delay = generate_impulse_train(finger_velocity, N_frame, fs_audio, delay)
 
@@ -424,6 +435,9 @@ if __name__ == "__main__":
         fs_spatial = np.int(np.ptp(freqs)+1)
         # print("fs_spatial",fs_spatial)
         # spectrum = spectrum/np.max(spectrum)
+
+
+
         spectrum_texture = spectrum
         spectrum_texture *= textures_gain
 
