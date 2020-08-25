@@ -17,6 +17,12 @@ import logging
 import win32gui
 import win32api
 
+import libGTVelocityStreamer
+
+
+IP = "127.0.0.1"
+PORT = 28900
+
 
 def isFloat(string):
     try:
@@ -254,7 +260,7 @@ json_filename = os.path.join("textures", "textures.json")
 with open(json_filename) as json_file:
     textures_dictionary = json.load(json_file)
 
-textures_gain = 0.4
+textures_gain = 0.1
 list_of_textures += sorted(textures_dictionary.keys())
 selected_texture = list_of_textures[0]
 
@@ -262,7 +268,7 @@ selected_texture = list_of_textures[0]
 list_of_output_devices = []
 list_of_output_devices_selected = None
 list_of_output_devices_selected_device_id = None
-output_volume = 80
+output_volume = 20
 
 gui_timetout = 10  #ms
 gui_plot_velocity_time = 50
@@ -318,6 +324,7 @@ if __name__ == "__main__":
         #     pprint.pprint(device)
             if device.get('maxOutputChannels') > 0:
                 name = device.get('name')
+                list_of_output_devices_selected = name
                 if "Cypress" in name:
                     list_of_output_devices_selected = name
                     list_of_output_devices_selected_device_id = device.get('index')
@@ -347,11 +354,17 @@ if __name__ == "__main__":
         
     ]
     column2 = [
-        [sg.Text("Sound plot")],
-        [ sg.Text("Velocity mm/s", key='text_velocity'),
-            sg.Checkbox('Add base velocity', default=True, key='checkbox_base_velocity'),
-            sg.Slider(range=(0, 60), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
-        [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
+        [sg.Text("Vibration Synhesizer")],
+        [sg.Frame(layout=[ 
+            [sg.Radio('Geomagic Touch', "radio_velocity_source", default=True, key='radio_velocity_source_geomagic')],
+            [sg.Radio('Mouse cursor', "radio_velocity_source", key='radio_velocity_source_mouse')],
+            [sg.Checkbox('Add base velocity', default=False, key='checkbox_base_velocity'),
+              sg.Slider(range=(0, 60), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
+        
+            [ sg.Text("Velocity mm/s", key='text_velocity'),],
+            [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
+        ],title='Velocity')],
+        
         [sg.Text("Select output device [Cypress]"),sg.Button("Refresh", key='btn_refresh_devices')],
         [sg.Listbox(values=list_of_output_devices, default_values=list_of_output_devices_selected, size=(30, 6), key='listbox_output_devices'),
           sg.Column(
@@ -362,13 +375,16 @@ if __name__ == "__main__":
         [sg.Text("Low: "),sg.Input(lowcut, key='input_filter_lowcutoff',size=(5,1), enable_events=True),sg.Text("Hz"),
             sg.Text("High: "),sg.Input(highcut, key='input_filter_highcutoff',size=(5,1), enable_events=True),sg.Text("Hz"),
              sg.Button("Set", key='btn_set_filter') ],
-        [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop')]
+        [sg.Button("Play", key='btn_play'),sg.Button("Stop", key='btn_stop'), 
+            sg.StatusBar( text=f'Stopped', size=(10,1), justification='left', visible=True, key='play_status_bar' )]
     ]
 
     # Define the window layout
     layout = [
         [sg.Menu(menu_def, tearoff=True)],  
         [sg.Column(column1),sg.VerticalSeparator(), sg.Column(column2)],
+        [sg.StatusBar( text=f'', size=(50,1), justification='left', visible=True, key='status_bar' )],
+ 
         # [sg.OK(), sg.Cancel()]
     ]
 
@@ -385,6 +401,7 @@ if __name__ == "__main__":
         icon = sg.DEFAULT_BASE64_ICON,
 
     )
+    window['status_bar'].expand(expand_x=True, expand_y=True)
 
     # Add the plot to the window
     # draw_figure(window["canvas_texture_plot"].TKCanvas, fig)
@@ -433,10 +450,22 @@ if __name__ == "__main__":
     if 1:
         cursor = Cursor()
 
+        gt_device = libGTVelocityStreamer.GTVelocityStreamer(ip=IP, port=PORT,)
+
+        # while not ~gt_device.check_alive():
+        #     print("Not alive",gt_device.check_alive())
+        #     gt_device.close()
+        #     gt_device = libGTVelocityStreamer.GTVelocityStreamer(ip=IP, port=PORT,)
+        #     time.sleep(0.1)
+
+
         buffer_velocity = CircularBuffer(maxlen=max_samples_velocity)
         buffer_velocity_t = CircularBuffer(maxlen=max_samples_velocity)
 
         velocity_probe = cursor.speed()
+        velocity_probe = gt_device.speed()
+
+        
 
 
 
@@ -449,7 +478,7 @@ if __name__ == "__main__":
         
         plt.xlabel('Time')
         plt.ylabel('Velocity [mm/s]')
-        plt.subplots_adjust( bottom=0.25, left=0.15)
+        plt.subplots_adjust( bottom=0.25, left=0.20)
 
         window["-CANVAS_VELOCITY_PLOT-"].set_tooltip('Velocity plot')
         agg_velocity = draw_figure(window["-CANVAS_VELOCITY_PLOT-"].TKCanvas, figure_velocity)
@@ -471,22 +500,28 @@ if __name__ == "__main__":
         # print("Read events", values['listbox_texture_input'], values)
 
 
-        velocity_probe = cursor.speed()/200 + base_velocity
-        window['text_velocity'].update("V=%03.1fmm/s"%(velocity_probe))
+
+        if values['radio_velocity_source_mouse']:
+            velocity_probe = cursor.speed()/200 + base_velocity
+        elif values['radio_velocity_source_geomagic']:
+            velocity_probe = gt_device.speed() + base_velocity
+            if not gt_device.alive:
+                window['status_bar'].update("Warning: GTVelocityStreamer not alive")
+            else:
+                window['status_bar'].update("GTVelocityStreamer ok")
+
+        else:
+            logging.warning("Radio radio_velocity_source not valid")
+       
+        velocity_probe = np.round(velocity_probe, decimals=1)
+
+
+
+        window['text_velocity'].update("V=%5.1fmm/s"%(velocity_probe))
 
         output_volume = values['slider_output_volume']
 
-        # if values['input_filter_lowcutoff'].isnumeric():
-        #     lowcut = np.float(values['input_filter_lowcutoff'])
-        # if values['input_filter_highcutoff'].isnumeric():
-        #     highcut = np.float(values['input_filter_highcutoff'])
-        # if values['input_textures_gain'].isnumeric():
-        #     textures_gain = np.float(values['input_textures_gain'])
-        
-        # print(event, "tex gain", values['input_textures_gain'])
 
-# btn_set_filter
-# btn_set_textures_gain
         if event == 'btn_set_filter':
 
             # if values['input_filter_lowcutoff'].isnumeric():
@@ -587,11 +622,14 @@ if __name__ == "__main__":
             threads_texture.append(x)
             
             x.start()
+            window['play_status_bar'].update("Playing")
             
         if event in ('btn_stop'):
             logging.info("Main    : Stop")
 
             flag_play_texture = False
+            window['play_status_bar'].update("Stopped")
+
 
         if event in ('btn_refresh_devices'):
             logging.info("Main    : Refreshing device list")
