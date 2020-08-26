@@ -171,7 +171,7 @@ def thread_PlayTexture_blocking(output_device_index=None):
                     d_texture = np.gradient(texture_frame, transient_x)
                     d2_texture = np.gradient(d_texture, transient_x)
                     # d2_texture = d2_texture/np.max(d2_texture)
-                    logging.info("Size of d2 %f"%(np.ptp(d2_texture)))
+                    # logging.info("Size of d2 %f"%(np.ptp(d2_texture)))
 
                     texture_frame = d2_texture
 

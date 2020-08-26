@@ -359,9 +359,9 @@ def callback(in_data, frame_count, time_info, status):
         
     
     frame = np.copy(buffer.extractleft(frame_count))
-
+    
 #         sig = butter_lowpass_filter(sig, cutoff, fs_audio, order=5)
-    frame, zf = signal.lfilter(b, a, frame, zi=zf)
+    # frame, zf = signal.lfilter(b, a, frame, zi=zf)
     
     
     audio = array2audio(frame.real)
