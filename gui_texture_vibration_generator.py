@@ -282,7 +282,7 @@ list_of_output_devices_selected_device_id = None
 output_volume = 20
 
 gui_timetout = 10  #ms
-gui_plot_velocity_time = 50
+gui_plot_velocity_time = 500
 
 base_velocity = 10
 max_samples_velocity = 200
@@ -372,7 +372,7 @@ if __name__ == "__main__":
             [sg.Checkbox('Add base velocity', default=False, key='checkbox_base_velocity'),
               sg.Slider(range=(0, 60), orientation='h', size=(20, 5), default_value=10, tick_interval=10, key='slider_base_velocity')],
         
-            [ sg.Text("Velocity mm/s", key='text_velocity'),],
+            [sg.Checkbox('Plot', default=False, key='checkbox_plot_velocity'), sg.Text("Velocity mm/s", key='text_velocity'),],
             [sg.Canvas(key="-CANVAS_VELOCITY_PLOT-", size=(100, 50)) ],
         ],title='Velocity')],
         
@@ -532,6 +532,7 @@ if __name__ == "__main__":
 
 
         window['text_velocity'].update("V=%5.1fmm/s"%(velocity_probe))
+        # logging.warning(velocity_probe)
 
         output_volume = values['slider_output_volume']
 
@@ -578,7 +579,10 @@ if __name__ == "__main__":
             buffer_velocity_t.extend([time.time()])
             curr_time_plot = time.time()
 
-            if curr_time_plot - prev_time_plot > gui_plot_velocity_time/1000:
+            if curr_time_plot - prev_time_plot > gui_plot_velocity_time/1000 and values['checkbox_plot_velocity']:
+
+                # logging.warning('Plot velocity')
+
                 ax = figure_velocity.axes[0]
                 ax.cla()
                 ax.plot(np.array(buffer_velocity_t)-np.array(buffer_velocity_t)[-1], buffer_velocity)
@@ -589,6 +593,7 @@ if __name__ == "__main__":
                 # plt.subplots_adjust( bottom=0.6, left=0.15)
                 agg_velocity.draw()
                 prev_time_plot = curr_time_plot
+                
 
         # if event == sg.WIN_CLOSED or event == 'Exit':
         if event in ('Exit', None, 'Cancel'):
@@ -677,6 +682,9 @@ if __name__ == "__main__":
         # Updating the spectrum texture         
         # creating analytical spectrum texture
         if selected_texture != values['listbox_texture_input'][0] or event=='btn_set_textures_gain':
+
+            logging.warning('New texture')
+
             N_texture = 512*4
 
             selected_texture = values['listbox_texture_input'][0]
