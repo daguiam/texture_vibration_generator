@@ -451,7 +451,7 @@ if __name__ == "__main__":
         # plt.plot(np.fft.fftshift(np.fft.fftfreq(len(spectrum_texture))),np.abs(spectrum_texture))
         plt.plot(freqs, spectrum)
 
-        plt.xlabel('k [1/mm]')
+        plt.xlabel('x [mm]')
         plt.ylabel('A [a.u.]')
 
         plt.xlim(xmin=0)
@@ -715,7 +715,7 @@ if __name__ == "__main__":
             # ax.set_xlim(xmin=0, xmax=100)
             # ax.set_ylim(0,1)
 
-            ax.set_xlabel('k [1/mm]')
+            ax.set_xlabel('x [mm]')
             ax.set_ylabel('A [a.u.]')
 
             ax.set_xlim(xmin=0)
